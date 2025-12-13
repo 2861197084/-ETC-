@@ -1,0 +1,208 @@
+// ============================================
+// ETC 大数据平台 - 全局样式
+// ============================================
+
+// 重置样式
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: $font-sans;
+  color: $text-primary;
+  background: $dashboard-bg;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+#app {
+  width: 100%;
+  min-height: 100vh;
+}
+
+// 链接样式
+a {
+  color: $color-primary;
+  text-decoration: none;
+  transition: color $transition-fast;
+  
+  &:hover {
+    color: lighten($color-primary, 10%);
+  }
+}
+
+// 滚动条样式
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 212, 255, 0.3);
+  border-radius: 3px;
+  
+  &:hover {
+    background: rgba(0, 212, 255, 0.5);
+  }
+}
+
+// 选中文字样式
+::selection {
+  background: rgba(0, 212, 255, 0.3);
+  color: #fff;
+}
+
+// 大屏专用样式
+.dashboard-page {
+  background: linear-gradient(135deg, $dashboard-bg 0%, $dashboard-bg-dark 100%);
+  min-height: 100vh;
+  position: relative;
+  overflow: hidden;
+  
+  // 背景网格效果
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: 
+      linear-gradient(rgba(30, 144, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(30, 144, 255, 0.03) 1px, transparent 1px);
+    background-size: 50px 50px;
+    pointer-events: none;
+  }
+}
+
+// 卡片通用样式
+.card {
+  @include dashboard-card;
+  padding: $spacing-md;
+  
+  &--glow {
+    @include glow-border;
+  }
+}
+
+// 标题样式
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  margin-bottom: $spacing-md;
+  padding-bottom: $spacing-sm;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+  
+  &::before {
+    content: '';
+    width: 4px;
+    height: 16px;
+    background: linear-gradient(180deg, $color-primary, transparent);
+    border-radius: 2px;
+  }
+  
+  span {
+    font-size: 14px;
+    font-weight: 600;
+    color: $color-primary;
+    letter-spacing: 2px;
+  }
+}
+
+// 数字样式
+.number {
+  font-family: $font-din;
+  font-weight: bold;
+  
+  &--primary {
+    color: $color-primary;
+  }
+  
+  &--success {
+    color: $color-success;
+  }
+  
+  &--warning {
+    color: $color-warning;
+  }
+  
+  &--danger {
+    color: $color-danger;
+  }
+}
+
+// 动画关键帧
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes glow {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(0, 212, 255, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.6);
+  }
+}
+
+// 工具类
+.animate-fade-in {
+  animation: fadeIn 0.5s ease forwards;
+}
+
+.animate-slide-in {
+  animation: slideInLeft 0.5s ease forwards;
+}
+
+.animate-pulse {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.animate-glow {
+  animation: glow 2s ease-in-out infinite;
+}
+

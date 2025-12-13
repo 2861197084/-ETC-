@@ -64,9 +64,3 @@ debug.log
 *.temp
 .cache/
 
-# Data files
-# data/*.csv
-# data/*.json
-
-# Docker
-docker-compose.override.yml
