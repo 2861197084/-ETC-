@@ -74,3 +74,6 @@ docker-compose.override.yml
 # data
 *.csv
 *.xlsx
+_pycache_/
+
+*.pyc
