@@ -6,7 +6,8 @@ export const templateRoutes: AppRouteRecord = {
   component: '/index/index',
   meta: {
     title: 'menus.template.title',
-    icon: 'ri:apps-2-line'
+    icon: 'ri:apps-2-line',
+    isHide: true
   },
   children: [
     {

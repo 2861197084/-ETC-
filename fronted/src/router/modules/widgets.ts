@@ -6,7 +6,8 @@ export const widgetsRoutes: AppRouteRecord = {
   component: '/index/index',
   meta: {
     title: 'menus.widgets.title',
-    icon: 'ri:apps-2-add-line'
+    icon: 'ri:apps-2-add-line',
+    isHide: true
   },
   children: [
     {

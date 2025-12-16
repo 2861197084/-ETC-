@@ -7,7 +7,8 @@ export const articleRoutes: AppRouteRecord = {
   meta: {
     title: 'menus.article.title',
     icon: 'ri:book-2-line',
-    roles: ['R_SUPER', 'R_ADMIN']
+    roles: ['R_SUPER', 'R_ADMIN'],
+    isHide: true
   },
   children: [
     {

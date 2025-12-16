@@ -98,46 +98,44 @@ npm run build
 
 ### 访问地址
 
-- 开发环境：http://localhost:3000
-- 门户首页：http://localhost:3000/
-- 数据大屏：http://localhost:3000/dashboard
-- 交互式查询：http://localhost:3000/query
-- 离线预测：http://localhost:3000/predict
+- 开发环境：http://localhost:5174 （端口可能因占用而变化）
+- 系统首页：http://localhost:5174/
+- ETC实时监控：http://localhost:5174/etc/monitor
+- 数据查询中心：http://localhost:5174/etc/query
+- 离线预测分析：http://localhost:5174/etc/prediction
+
+> 注：前端基于开源项目 art-design-pro，已通过路由配置隐藏无关模块菜单，仅显示ETC大数据平台相关功能。
 
 ## 项目结构
 
 ```
 etc-bigdata-platform/
-├── frontend/                    # 前端项目
+├── fronted/                     # 前端项目（基于 art-design-pro）
 │   ├── src/
 │   │   ├── api/                # API 接口定义
 │   │   ├── assets/             # 静态资源
-│   │   │   ├── china.json      # 中国地图数据
-│   │   │   └── styles/         # 全局样式
 │   │   ├── components/         # 通用组件
-│   │   │   ├── charts/         # 图表组件
-│   │   │   │   ├── ChinaMapChart.vue
-│   │   │   │   ├── TrendLineChart.vue
-│   │   │   │   ├── RingPieChart.vue
-│   │   │   │   ├── BarRankChart.vue
-│   │   │   │   └── Bar3DChart.vue
-│   │   │   ├── dashboard/      # 大屏专用组件
-│   │   │   │   ├── KPIStatCard.vue
-│   │   │   │   ├── DigitalClock.vue
-│   │   │   │   └── AlertTicker.vue
-│   │   │   └── common/         # 公共组件
-│   │   ├── composables/        # 组合式函数
-│   │   │   └── useDashboardData.ts
+│   │   │   └── business/etc/   # ETC业务组件
+│   │   ├── config/             # 配置文件
+│   │   ├── directives/         # Vue指令
+│   │   ├── hooks/              # 组合式函数
+│   │   ├── locales/            # 国际化配置
 │   │   ├── mock/               # Mock 数据
-│   │   │   └── dashboard.ts
 │   │   ├── router/             # 路由配置
-│   │   ├── stores/             # Pinia 状态管理
+│   │   │   └── modules/        # 路由模块
+│   │   │       ├── etc.ts      # ETC路由（显示）
+│   │   │       └── ...         # 其他路由（已隐藏菜单）
+│   │   ├── store/              # Pinia 状态管理
+│   │   ├── types/              # TypeScript类型定义
 │   │   ├── utils/              # 工具函数
 │   │   └── views/              # 页面视图
-│   │       ├── portal/         # 门户首页
-│   │       ├── dashboard/      # 数据大屏
-│   │       ├── query/          # 交互式查询
-│   │       └── predict/        # 离线预测
+│   │       ├── etc/            # ETC相关页面 ✅
+│   │       │   ├── monitor/    # 实时监控指挥舱
+│   │       │   ├── query/      # 数据查询中心
+│   │       │   └── prediction/ # 离线预测分析
+│   │       ├── auth/           # 认证页面（菜单已隐藏）
+│   │       ├── dashboard/      # 原框架大屏（菜单已隐藏）
+│   │       └── ...             # 其他模块（菜单已隐藏）
 │   └── package.json
 ├── data/                        # 样例数据
 ├── example/                     # 设计参考
@@ -154,7 +152,7 @@ etc-bigdata-platform/
 |------|----------|------|
 | 框架 | Vue 3.4+ | Composition API |
 | 构建 | Vite 5.x | 快速开发体验 |
-| UI库 | Naive UI | 现代化组件库 |
+| UI库 | Element Plus + Naive UI | 混合使用组件库 |
 | 图表 | ECharts 5.x | 数据可视化 |
 | 地图 | ECharts Map | 中国地图 |
 | 状态 | Pinia | 状态管理 |
