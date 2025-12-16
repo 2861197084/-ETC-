@@ -1,5 +1,5 @@
 # Dependencies
-node_modules/
+/fronted/node_modules/
 .pnp
 .pnp.js
 
@@ -70,3 +70,7 @@ debug.log
 
 # Docker
 docker-compose.override.yml
+
+# data
+*.csv
+*.xlsx
