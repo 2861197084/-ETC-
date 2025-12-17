@@ -1,0 +1,4 @@
+create_namespace 'etc'
+create 'etc:pass_record', {NAME => 'd', VERSIONS => 1}
+exit
+

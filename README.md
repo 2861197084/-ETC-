@@ -19,7 +19,7 @@
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     展示层 (Frontend)                        │
-│  Vue 3 + Vite + TypeScript + ECharts + Naive UI             │
+│  Vue 3 + Vite + TypeScript              │
 ├─────────────────────────────────────────────────────────────┤
 │                     服务层 (Backend)                         │
 │  API Services / WebSocket / 缓存层 (Redis)                   │
@@ -79,12 +79,13 @@
 
 - Node.js >= 18.0
 - npm >= 9.0
+- Docker Desktop（推荐，用于后端/大数据组件）
 
 ### 安装与运行
 
 ```bash
 # 进入前端目录
-cd fronted
+cd frontend
 
 # 安装依赖
 npm install
@@ -95,6 +96,28 @@ npm run dev
 # 构建生产版本
 npm run build
 ```
+
+## 后端环境（Docker）
+
+后端与大数据组件统一用 Docker Compose 搭建（Kafka + Flink + MySQL 分片 + ShardingSphere-Proxy + Redis，HBase/Spark 可选）。
+
+```bash
+# 启动基础组件
+docker compose up -d --build
+
+# 启用 HBase（明细存储）
+docker compose --profile hbase up -d --build
+
+# 启用 Spark（离线训练/预测）
+docker compose --profile spark up -d --build
+```
+
+详细说明见：`infra/README.md`
+
+## 前后端联调（开发）
+
+- 默认前端使用 `frontend/.env.development` 中的 Mock 地址
+- 如需对接本地后端：参考 `frontend/.env.development.local.example` 创建 `frontend/.env.development.local`
 
 ### 访问地址
 
@@ -110,7 +133,7 @@ npm run build
 
 ```
 etc-bigdata-platform/
-├── fronted/                     # 前端项目（基于 art-design-pro）
+├── frontend/                    # 前端项目（基于 art-design-pro）
 │   ├── src/
 │   │   ├── api/                # API 接口定义
 │   │   ├── assets/             # 静态资源
@@ -204,4 +227,3 @@ etc-bigdata-platform/
 ## License
 
 MIT License
-

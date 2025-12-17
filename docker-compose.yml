@@ -1,0 +1,240 @@
+name: etc-platform
+
+services:
+  zookeeper:
+    image: public.ecr.aws/docker/library/zookeeper:3.9.3
+    environment:
+      ZOO_4LW_COMMANDS_WHITELIST: ruok,stat,mntr
+      ZOO_TICK_TIME: 2000
+      ZOO_INIT_LIMIT: 10
+      ZOO_SYNC_LIMIT: 5
+    ports:
+      - "2181:2181"
+    volumes:
+      - zookeeper-data:/data
+      - zookeeper-datalog:/datalog
+    healthcheck:
+      test: ["CMD-SHELL", "echo ruok | nc 127.0.0.1 2181 | grep -q imok"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  kafka:
+    build:
+      context: ./infra/kafka
+      args:
+        KAFKA_VERSION: "3.8.1"
+        SCALA_VERSION: "2.13"
+    # 开发环境优先保证可启动（Docker volume 首次创建时常为 root:root，非 root 容器用户会写入失败）
+    user: "0:0"
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_CLUSTER_ID: "${KAFKA_CLUSTER_ID:-}"
+      KAFKA_EXTERNAL_HOST: "${KAFKA_EXTERNAL_HOST:-localhost}"
+    ports:
+      - "19092:19092" # host access (EXTERNAL)
+    volumes:
+      - kafka-data:/var/lib/kafka
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server 127.0.0.1:9092 >/dev/null 2>&1",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 18
+
+  kafka-init:
+    build:
+      context: ./infra/kafka
+      args:
+        KAFKA_VERSION: "3.8.1"
+        SCALA_VERSION: "2.13"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    command:
+      [
+        "bash",
+        "-lc",
+        "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic etc.pass.raw --partitions 6 --replication-factor 1 && \
+         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic etc.pass.clean --partitions 6 --replication-factor 1 && \
+         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic etc.alerts.clone_plate --partitions 3 --replication-factor 1 && \
+         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic etc.alerts.pressure --partitions 3 --replication-factor 1 && \
+         echo 'kafka topics ensured.'",
+      ]
+    restart: "no"
+
+  redis:
+    image: public.ecr.aws/docker/library/redis:7.4-alpine
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  mysql0:
+    image: public.ecr.aws/docker/library/mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-root}"
+      TZ: Asia/Shanghai
+    ports:
+      - "33060:3306"
+    volumes:
+      - mysql0-data:/var/lib/mysql
+      - ./infra/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+
+  mysql1:
+    image: public.ecr.aws/docker/library/mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-root}"
+      TZ: Asia/Shanghai
+    ports:
+      - "33061:3306"
+    volumes:
+      - mysql1-data:/var/lib/mysql
+      - ./infra/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+
+  shardingsphere:
+    build:
+      context: ./infra/shardingsphere
+      args:
+        SHARDINGSPHERE_VERSION: "5.5.0"
+    depends_on:
+      mysql0:
+        condition: service_healthy
+      mysql1:
+        condition: service_healthy
+    ports:
+      - "3307:3307"
+    environment:
+      JAVA_OPTS: "-Xms512m -Xmx1024m"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -lc 'exec 3<>/dev/tcp/127.0.0.1/3307'"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+
+  flink-jobmanager:
+    build:
+      context: ./infra/flink
+      args:
+        FLINK_VERSION: "1.20.0"
+        KAFKA_CONNECTOR_VERSION: "3.4.0-1.20"
+    command: jobmanager
+    ports:
+      - "8081:8081"
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        rest.address: flink-jobmanager
+        rest.port: 8081
+        taskmanager.numberOfTaskSlots: 4
+        parallelism.default: 2
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  flink-taskmanager:
+    build:
+      context: ./infra/flink
+      args:
+        FLINK_VERSION: "1.20.0"
+        KAFKA_CONNECTOR_VERSION: "3.4.0-1.20"
+    command: taskmanager
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 4
+        parallelism.default: 2
+    depends_on:
+      - flink-jobmanager
+
+  hbase:
+    build:
+      context: ./infra/hbase
+      args:
+        HBASE_VERSION: "2.6.1"
+    profiles: ["hbase"]
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "16010:16010" # HBase Master UI
+      - "16030:16030" # RegionServer UI
+    volumes:
+      - hbase-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:16010/master-status >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+
+  hbase-init:
+    build:
+      context: ./infra/hbase
+      args:
+        HBASE_VERSION: "2.6.1"
+    profiles: ["hbase"]
+    depends_on:
+      hbase:
+        condition: service_healthy
+    command: ["bash", "-lc", "/opt/hbase/bin/hbase shell /init/create-tables.hbase"]
+    restart: "no"
+
+  spark-master:
+    build:
+      context: ./infra/spark
+      args:
+        SPARK_VERSION: "3.5.4"
+    profiles: ["spark"]
+    environment:
+      SPARK_MODE: master
+    ports:
+      - "8080:8080" # Spark master UI
+      - "7077:7077" # Spark master
+    volumes:
+      - spark-data:/data
+
+  spark-worker:
+    build:
+      context: ./infra/spark
+      args:
+        SPARK_VERSION: "3.5.4"
+    profiles: ["spark"]
+    environment:
+      SPARK_MODE: worker
+      SPARK_MASTER_URL: spark://spark-master:7077
+    depends_on:
+      - spark-master
+    ports:
+      - "8082:8081" # Spark worker UI
+    volumes:
+      - spark-data:/data
+
+volumes:
+  zookeeper-data:
+  zookeeper-datalog:
+  kafka-data:
+  redis-data:
+  mysql0-data:
+  mysql1-data:
+  hbase-data:
+  spark-data:
