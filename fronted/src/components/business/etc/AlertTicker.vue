@@ -116,17 +116,19 @@ onUnmounted(() => {
 
 <style lang="scss" scoped>
 .alert-ticker {
-  background: rgba(0, 0, 0, 0.6);
+  background: #fff;
   border-radius: 8px;
   overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e8e8e8;
 
   .ticker-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 12px 16px;
-    background: rgba(255, 77, 79, 0.2);
-    border-bottom: 1px solid rgba(255, 77, 79, 0.3);
+    background: #fff1f0;
+    border-bottom: 1px solid #ffccc7;
 
     .ticker-title {
       display: flex;
@@ -142,14 +144,14 @@ onUnmounted(() => {
     max-height: 300px;
     overflow-y: auto;
     scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+    scrollbar-color: #d9d9d9 transparent;
 
     &::-webkit-scrollbar {
       width: 4px;
     }
 
     &::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.2);
+      background: #d9d9d9;
       border-radius: 2px;
     }
   }
@@ -165,17 +167,17 @@ onUnmounted(() => {
     align-items: center;
     gap: 8px;
     padding: 10px 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid #f0f0f0;
     font-size: 13px;
-    color: #fff;
+    color: #1f2329;
     transition: background 0.3s;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.05);
+      background: #fafafa;
     }
 
     .alert-time {
-      color: rgba(255, 255, 255, 0.5);
+      color: #8c8c8c;
       font-size: 12px;
       min-width: 50px;
     }
@@ -187,22 +189,22 @@ onUnmounted(() => {
       font-weight: 500;
 
       &.overspeed {
-        background: rgba(250, 173, 20, 0.2);
-        color: #faad14;
+        background: #fffbe6;
+        color: #d48806;
       }
 
       &.duplicate {
-        background: rgba(255, 77, 79, 0.2);
+        background: #fff1f0;
         color: #ff4d4f;
       }
 
       &.illegal {
-        background: rgba(255, 77, 79, 0.2);
+        background: #fff1f0;
         color: #ff4d4f;
       }
 
       &.dispatch {
-        background: rgba(24, 144, 255, 0.2);
+        background: #e6f7ff;
         color: #1890ff;
       }
     }
@@ -218,11 +220,11 @@ onUnmounted(() => {
 
     .alert-plate {
       padding: 2px 8px;
-      background: rgba(255, 255, 255, 0.1);
+      background: #f5f5f5;
       border-radius: 4px;
       font-family: 'Courier New', monospace;
       font-weight: 600;
-      color: #fff;
+      color: #1f2329;
     }
   }
 }

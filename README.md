@@ -84,7 +84,7 @@
 
 ```bash
 # 进入前端目录
-cd frontend
+cd fronted
 
 # 安装依赖
 npm install

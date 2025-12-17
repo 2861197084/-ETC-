@@ -351,8 +351,14 @@ async function handleDynamicRoutes(
  */
 async function fetchUserInfo(): Promise<void> {
   const userStore = useUserStore()
+  // 保留登录时设置的角色信息
+  const existingRoles = userStore.info?.roles
   const data = await fetchGetUserInfo()
-  userStore.setUserInfo(data)
+  // 合并用户信息，优先使用登录时设置的角色
+  userStore.setUserInfo({
+    ...data,
+    roles: existingRoles || data.roles
+  })
   // 检查并清理工作台标签页（如果是不同用户登录）
   userStore.checkAndClearWorktabs()
 }

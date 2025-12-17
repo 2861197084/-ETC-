@@ -38,7 +38,7 @@ import { headerBarConfig } from './modules/headerBar'
 const appConfig: SystemConfig = {
   // 系统信息
   systemInfo: {
-    name: 'Art Design Pro' // 系统名称
+    name: '彭城交通' // 系统名称
   },
   // 系统主题
   systemThemeStyles: {
@@ -118,13 +118,13 @@ const appConfig: SystemConfig = {
   ],
   // 系统主色
   systemMainColor: [
-    '#5D87FF',
-    '#B48DF3',
-    '#1D84FF',
-    '#60C041',
-    '#38C0FC',
-    '#F9901F',
-    '#FF80C8'
+    '#1890ff',
+    '#40a9ff',
+    '#096dd9',
+    '#52c41a',
+    '#13c2c2',
+    '#2f54eb',
+    '#722ed1'
   ] as const,
   // 快速入口配置
   fastEnter: fastEnterConfig,

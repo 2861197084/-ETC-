@@ -3,7 +3,7 @@
     <!-- 顶部标题栏 -->
     <div class="top-header">
       <div class="header-left">
-        <h1 class="system-title">高速公路 ETC 大数据管理平台</h1>
+        <h1 class="system-title">彭城交通 大数据管理平台</h1>
         <span class="system-subtitle">实时监控指挥舱</span>
       </div>
       <div class="header-center">
@@ -240,7 +240,7 @@ onUnmounted(() => {
   width: 100%;
   height: 100vh;
   overflow: hidden;
-  background: #0a0e27;
+  background: #f5f7fa;
 }
 
 // 顶部标题栏
@@ -249,8 +249,9 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 12px 24px;
-  background: linear-gradient(180deg, rgba(10, 14, 39, 0.95) 0%, rgba(10, 14, 39, 0.85) 100%);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: #fff;
+  border-bottom: 1px solid #e8e8e8;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   flex-shrink: 0;
 
   .header-left {
@@ -258,17 +259,13 @@ onUnmounted(() => {
       margin: 0;
       font-size: 22px;
       font-weight: 700;
-      color: #fff;
+      color: #1890ff;
       letter-spacing: 2px;
-      background: linear-gradient(90deg, #667eea, #764ba2);
-      background-clip: text;
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
     }
 
     .system-subtitle {
       font-size: 13px;
-      color: rgba(255, 255, 255, 0.6);
+      color: #8c8c8c;
     }
   }
 
@@ -278,9 +275,9 @@ onUnmounted(() => {
       align-items: center;
       gap: 8px;
       padding: 6px 14px;
-      background: rgba(255, 255, 255, 0.1);
+      background: #f0f5ff;
       border-radius: 20px;
-      color: #fff;
+      color: #1890ff;
       font-size: 14px;
     }
   }
@@ -293,13 +290,13 @@ onUnmounted(() => {
         display: block;
         font-size: 24px;
         font-weight: 600;
-        color: #fff;
+        color: #1f2329;
         font-family: 'Courier New', monospace;
       }
 
       .date {
         font-size: 12px;
-        color: rgba(255, 255, 255, 0.6);
+        color: #8c8c8c;
       }
     }
   }
@@ -340,9 +337,9 @@ onUnmounted(() => {
   height: calc(100vh - 300px);
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: #e4e4e4;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e8e8e8;
+  background: #fff;
 }
 
 // 底部指标栏
@@ -350,9 +347,9 @@ onUnmounted(() => {
   display: flex;
   gap: 12px;
   padding: 12px 16px;
-  background: rgba(0, 0, 0, 0.6);
+  background: #fff;
   border-radius: 12px;
-  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   flex-shrink: 0;
   overflow-x: auto;
 }
@@ -362,7 +359,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 10px;
   padding: 0 12px;
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  border-right: 1px solid #f0f0f0;
   white-space: nowrap;
 
   &:last-child {
@@ -387,7 +384,7 @@ onUnmounted(() => {
     .metric-value {
       font-size: 18px;
       font-weight: 700;
-      color: #fff;
+      color: #1f2329;
 
       &.alert {
         color: #ff4d4f;
@@ -396,13 +393,13 @@ onUnmounted(() => {
       small {
         font-size: 11px;
         font-weight: normal;
-        color: rgba(255, 255, 255, 0.5);
+        color: #8c8c8c;
       }
     }
 
     .metric-label {
       font-size: 11px;
-      color: rgba(255, 255, 255, 0.6);
+      color: #8c8c8c;
     }
   }
 }
@@ -419,21 +416,22 @@ onUnmounted(() => {
 
 // 收费站详情卡片
 .station-detail-card {
-  background: rgba(0, 0, 0, 0.8);
+  background: #fff;
   border-radius: 8px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid #e8e8e8;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 
   .card-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 12px 16px;
-    background: rgba(255, 255, 255, 0.05);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    background: #fafafa;
+    border-bottom: 1px solid #f0f0f0;
 
     .station-name {
-      color: #fff;
+      color: #1f2329;
       font-weight: 600;
     }
   }
@@ -446,26 +444,26 @@ onUnmounted(() => {
       justify-content: space-between;
       align-items: center;
       padding: 8px 0;
-      border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+      border-bottom: 1px dashed #f0f0f0;
 
       &:last-child {
         border-bottom: none;
       }
 
       .stat-label {
-        color: rgba(255, 255, 255, 0.6);
+        color: #8c8c8c;
         font-size: 13px;
       }
 
       .stat-value {
-        color: #fff;
+        color: #1f2329;
         font-size: 18px;
         font-weight: 600;
 
         small {
           font-size: 12px;
           font-weight: normal;
-          color: rgba(255, 255, 255, 0.5);
+          color: #8c8c8c;
         }
       }
     }
@@ -475,7 +473,7 @@ onUnmounted(() => {
     display: flex;
     gap: 8px;
     padding: 12px 16px;
-    background: rgba(255, 255, 255, 0.03);
+    background: #fafafa;
   }
 }
 

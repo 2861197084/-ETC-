@@ -1,0 +1,480 @@
+<template>
+  <div class="realtime-page">
+    <!-- 顶部统计卡片 -->
+    <div class="stats-row">
+      <el-row :gutter="16">
+        <el-col :span="6">
+          <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #667eea, #764ba2)">
+              <el-icon :size="24"><Van /></el-icon>
+            </div>
+            <div class="stat-info">
+              <div class="stat-value">{{ stats.todayTotal.toLocaleString() }}</div>
+              <div class="stat-label">今日总流量</div>
+            </div>
+          </div>
+        </el-col>
+        <el-col :span="6">
+          <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #f093fb, #f5576c)">
+              <el-icon :size="24"><Money /></el-icon>
+            </div>
+            <div class="stat-info">
+              <div class="stat-value">¥{{ stats.todayRevenue.toLocaleString() }}</div>
+              <div class="stat-label">今日总营收</div>
+            </div>
+          </div>
+        </el-col>
+        <el-col :span="6">
+          <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #4facfe, #00f2fe)">
+              <el-icon :size="24"><Odometer /></el-icon>
+            </div>
+            <div class="stat-info">
+              <div class="stat-value">{{ stats.avgSpeed }} <small>km/h</small></div>
+              <div class="stat-label">平均车速</div>
+            </div>
+          </div>
+        </el-col>
+        <el-col :span="6">
+          <div class="stat-card warning">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #fa709a, #fee140)">
+              <el-icon :size="24"><Warning /></el-icon>
+            </div>
+            <div class="stat-info">
+              <div class="stat-value alert">{{ stats.alertCount }}</div>
+              <div class="stat-label">今日告警</div>
+            </div>
+          </div>
+        </el-col>
+      </el-row>
+    </div>
+
+    <el-row :gutter="16">
+      <!-- 左侧：违禁信息 -->
+      <el-col :span="16">
+        <!-- 套牌车检测 -->
+        <div class="section-card">
+          <div class="section-header">
+            <div class="section-title">
+              <el-icon color="#ff4d4f"><Warning /></el-icon>
+              <span>套牌车检测</span>
+              <el-badge :value="clonePlates.length" type="danger" />
+            </div>
+            <el-button type="primary" link>查看全部</el-button>
+          </div>
+          <div class="clone-plate-list">
+            <div v-for="item in clonePlates" :key="item.id" class="clone-plate-item">
+              <div class="plate-info">
+                <span class="plate-number">{{ item.plateNumber }}</span>
+                <el-tag type="danger" size="small">疑似套牌</el-tag>
+              </div>
+              <div class="conflict-info">
+                <div class="location-item">
+                  <el-icon><Location /></el-icon>
+                  <span>{{ item.location1 }}</span>
+                  <span class="time">{{ item.time1 }}</span>
+                </div>
+                <div class="vs">VS</div>
+                <div class="location-item">
+                  <el-icon><Location /></el-icon>
+                  <span>{{ item.location2 }}</span>
+                  <span class="time">{{ item.time2 }}</span>
+                </div>
+              </div>
+              <div class="action-btns">
+                <el-button type="primary" size="small">详情</el-button>
+                <el-button type="warning" size="small">出警</el-button>
+              </div>
+            </div>
+            <el-empty v-if="clonePlates.length === 0" description="暂无套牌车检测" />
+          </div>
+        </div>
+
+        <!-- 其他违禁信息 -->
+        <div class="section-card">
+          <div class="section-header">
+            <div class="section-title">
+              <el-icon color="#fa8c16"><Bell /></el-icon>
+              <span>违禁信息</span>
+            </div>
+            <el-radio-group v-model="violationType" size="small">
+              <el-radio-button value="all">全部</el-radio-button>
+              <el-radio-button value="overspeed">超速</el-radio-button>
+              <el-radio-button value="overload">超载</el-radio-button>
+              <el-radio-button value="illegal">违规</el-radio-button>
+            </el-radio-group>
+          </div>
+          <el-table :data="violations" stripe max-height="300">
+            <el-table-column prop="plateNumber" label="车牌号" width="120" />
+            <el-table-column prop="vehicleType" label="车辆类型" width="100" />
+            <el-table-column prop="violation" label="违禁行为" width="120">
+              <template #default="{ row }">
+                <el-tag :type="getViolationTagType(row.violationType)" size="small">
+                  {{ row.violation }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="checkpoint" label="检测卡口" />
+            <el-table-column prop="time" label="检测时间" width="160" />
+            <el-table-column label="操作" width="100" fixed="right">
+              <template #default>
+                <el-button type="primary" link size="small">详情</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </el-col>
+
+      <!-- 右侧：站口压力预警 -->
+      <el-col :span="8">
+        <div class="section-card full-height">
+          <div class="section-header">
+            <div class="section-title">
+              <el-icon color="#1890ff"><TrendCharts /></el-icon>
+              <span>站口压力预警</span>
+            </div>
+          </div>
+          <div class="pressure-list">
+            <div 
+              v-for="item in pressureWarnings" 
+              :key="item.id" 
+              class="pressure-item"
+              :class="item.level"
+            >
+              <div class="station-info">
+                <span class="station-name">{{ item.stationName }}</span>
+                <el-tag :type="getPressureTagType(item.level)" size="small">
+                  {{ getPressureLabel(item.level) }}
+                </el-tag>
+              </div>
+              <div class="pressure-bar">
+                <div 
+                  class="pressure-fill" 
+                  :style="{ width: item.pressure + '%' }"
+                  :class="item.level"
+                ></div>
+              </div>
+              <div class="pressure-detail">
+                <span>当前流量: {{ item.currentFlow }} 辆/h</span>
+                <span class="prediction">
+                  <el-icon><TrendCharts /></el-icon>
+                  预测: {{ item.predictedFlow }} 辆/h
+                </span>
+              </div>
+              <div v-if="item.level !== 'normal'" class="ai-suggestion">
+                <el-icon><MagicStick /></el-icon>
+                {{ item.suggestion }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </el-col>
+    </el-row>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive } from 'vue'
+import { Van, Money, Odometer, Warning, Location, Bell, TrendCharts, MagicStick } from '@element-plus/icons-vue'
+
+defineOptions({ name: 'EtcRealtime' })
+
+// 统计数据
+const stats = reactive({
+  todayTotal: 128456,
+  todayRevenue: 2568900,
+  avgSpeed: 85,
+  alertCount: 12
+})
+
+// 套牌车检测
+const clonePlates = ref([
+  {
+    id: 1,
+    plateNumber: '苏C·12345',
+    location1: '徐州东站卡口',
+    time1: '14:28:35',
+    location2: '铜山收费站',
+    time2: '14:32:18'
+  },
+  {
+    id: 2,
+    plateNumber: '苏C·88888',
+    location1: '云龙湖卡口',
+    time1: '14:35:12',
+    location2: '新城区卡口',
+    time2: '14:36:45'
+  }
+])
+
+// 违禁类型筛选
+const violationType = ref('all')
+
+// 违禁信息列表
+const violations = ref([
+  { plateNumber: '苏C·66666', vehicleType: '小型车', violation: '超速 138km/h', violationType: 'overspeed', checkpoint: '徐州东站', time: '2025-12-17 14:20:33' },
+  { plateNumber: '皖A·11111', vehicleType: '大型车', violation: '超载 15%', violationType: 'overload', checkpoint: '铜山收费站', time: '2025-12-17 14:15:22' },
+  { plateNumber: '鲁B·99999', vehicleType: '中型车', violation: '逆行', violationType: 'illegal', checkpoint: '北站卡口', time: '2025-12-17 14:10:15' },
+  { plateNumber: '苏C·77777', vehicleType: '小型车', violation: '超速 125km/h', violationType: 'overspeed', checkpoint: '南站卡口', time: '2025-12-17 14:05:08' }
+])
+
+// 站口压力预警
+const pressureWarnings = ref([
+  { id: 1, stationName: '徐州东站', level: 'danger', pressure: 95, currentFlow: 2850, predictedFlow: 3200, suggestion: '建议开启备用车道，调配警力疏导' },
+  { id: 2, stationName: '铜山收费站', level: 'warning', pressure: 75, currentFlow: 2100, predictedFlow: 2400, suggestion: '预计30分钟后达到高峰，建议提前准备' },
+  { id: 3, stationName: '云龙湖卡口', level: 'normal', pressure: 45, currentFlow: 1200, predictedFlow: 1350, suggestion: '' },
+  { id: 4, stationName: '新城区卡口', level: 'normal', pressure: 35, currentFlow: 980, predictedFlow: 1100, suggestion: '' }
+])
+
+const getViolationTagType = (type: string) => {
+  const types: Record<string, string> = {
+    overspeed: 'danger',
+    overload: 'warning',
+    illegal: 'danger'
+  }
+  return types[type] || 'info'
+}
+
+const getPressureTagType = (level: string) => {
+  const types: Record<string, string> = {
+    danger: 'danger',
+    warning: 'warning',
+    normal: 'success'
+  }
+  return types[level] || 'info'
+}
+
+const getPressureLabel = (level: string) => {
+  const labels: Record<string, string> = {
+    danger: '拥堵',
+    warning: '缓行',
+    normal: '畅通'
+  }
+  return labels[level] || '未知'
+}
+</script>
+
+<style lang="scss" scoped>
+.realtime-page {
+  padding: 20px;
+  background: #f5f7fa;
+  min-height: calc(100vh - 120px);
+}
+
+.stats-row {
+  margin-bottom: 16px;
+
+  .stat-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+
+    .stat-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+    }
+
+    .stat-info {
+      .stat-value {
+        font-size: 24px;
+        font-weight: 700;
+        color: #1f2329;
+
+        small {
+          font-size: 14px;
+          font-weight: normal;
+          color: #8c8c8c;
+        }
+
+        &.alert {
+          color: #ff4d4f;
+        }
+      }
+
+      .stat-label {
+        font-size: 13px;
+        color: #8c8c8c;
+        margin-top: 4px;
+      }
+    }
+  }
+}
+
+.section-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+
+  &.full-height {
+    height: calc(100% - 16px);
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #f0f0f0;
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      color: #1f2329;
+    }
+  }
+}
+
+// 套牌车列表
+.clone-plate-list {
+  .clone-plate-item {
+    padding: 12px;
+    border: 1px solid #ffccc7;
+    border-radius: 8px;
+    background: #fff2f0;
+    margin-bottom: 12px;
+
+    .plate-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+
+      .plate-number {
+        font-size: 16px;
+        font-weight: 600;
+        color: #1f2329;
+      }
+    }
+
+    .conflict-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+      color: #595959;
+
+      .location-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+
+        .time {
+          color: #8c8c8c;
+          margin-left: 8px;
+        }
+      }
+
+      .vs {
+        color: #ff4d4f;
+        font-weight: 600;
+      }
+    }
+
+    .action-btns {
+      margin-top: 12px;
+      display: flex;
+      gap: 8px;
+    }
+  }
+}
+
+// 压力预警列表
+.pressure-list {
+  .pressure-item {
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    border: 1px solid #f0f0f0;
+
+    &.danger {
+      border-color: #ffccc7;
+      background: #fff2f0;
+    }
+
+    &.warning {
+      border-color: #ffe58f;
+      background: #fffbe6;
+    }
+
+    .station-info {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+
+      .station-name {
+        font-weight: 600;
+        color: #1f2329;
+      }
+    }
+
+    .pressure-bar {
+      height: 8px;
+      background: #f0f0f0;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 8px;
+
+      .pressure-fill {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.3s;
+
+        &.danger {
+          background: linear-gradient(90deg, #ff4d4f, #ff7875);
+        }
+
+        &.warning {
+          background: linear-gradient(90deg, #faad14, #ffc53d);
+        }
+
+        &.normal {
+          background: linear-gradient(90deg, #52c41a, #73d13d);
+        }
+      }
+    }
+
+    .pressure-detail {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #8c8c8c;
+
+      .prediction {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        color: #1890ff;
+      }
+    }
+
+    .ai-suggestion {
+      margin-top: 8px;
+      padding: 8px;
+      background: rgba(24, 144, 255, 0.1);
+      border-radius: 4px;
+      font-size: 12px;
+      color: #1890ff;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+  }
+}
+</style>

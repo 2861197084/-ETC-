@@ -7,7 +7,7 @@
     </div>
 
     <div class="left-img">
-      <ThemeSvg :src="loginIcon" size="100%" />
+      <img :src="loginBgImg" alt="login" class="login-bg-image" />
     </div>
 
     <div class="text-wrap">
@@ -72,7 +72,7 @@
 
 <script setup lang="ts">
   import AppConfig from '@/config'
-  import loginIcon from '@imgs/svg/login_icon.svg'
+  import loginBgImg from '@imgs/login/login_left_view.png'
   import { themeAnimation } from '@/utils/ui/animation'
 
   // 定义 props
@@ -118,11 +118,17 @@
 
     .left-img {
       position: absolute;
-      inset: 0 0 10.5%;
-      z-index: 10;
-      width: 40%;
-      margin: auto;
+      inset: 0;
+      z-index: 1;
+      width: 100%;
+      height: 100%;
       animation: slideInLeft 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+
+      .login-bg-image {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
     }
 
     .text-wrap {

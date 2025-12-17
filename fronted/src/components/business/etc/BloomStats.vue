@@ -2,7 +2,6 @@
   <div class="bloom-stats">
     <div class="stats-header">
       <span class="stats-title">车辆来源统计</span>
-      <span class="stats-subtitle">布隆过滤器实时分析</span>
     </div>
     <div class="stats-chart" ref="chartRef"></div>
     <div class="stats-legend">
@@ -85,12 +84,12 @@ const updateChart = () => {
             total: {
               fontSize: 28,
               fontWeight: 'bold',
-              color: '#fff',
+              color: '#1f2329',
               lineHeight: 36
             },
             label: {
               fontSize: 12,
-              color: 'rgba(255,255,255,0.6)',
+              color: '#8c8c8c',
               lineHeight: 20
             }
           }
@@ -155,23 +154,25 @@ onUnmounted(() => {
 
 <style lang="scss" scoped>
 .bloom-stats {
-  background: rgba(0, 0, 0, 0.6);
+  background: #fff;
   border-radius: 8px;
   padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e8e8e8;
 
   .stats-header {
     margin-bottom: 12px;
 
     .stats-title {
       display: block;
-      color: #fff;
+      color: #1f2329;
       font-size: 14px;
       font-weight: 600;
     }
 
     .stats-subtitle {
       display: block;
-      color: rgba(255, 255, 255, 0.5);
+      color: #8c8c8c;
       font-size: 12px;
       margin-top: 4px;
     }
@@ -209,18 +210,18 @@ onUnmounted(() => {
       }
 
       .legend-label {
-        color: rgba(255, 255, 255, 0.8);
+        color: #595959;
         min-width: 60px;
       }
 
       .legend-value {
-        color: #fff;
+        color: #1f2329;
         font-weight: 600;
         min-width: 50px;
       }
 
       .legend-percent {
-        color: rgba(255, 255, 255, 0.5);
+        color: #8c8c8c;
       }
     }
   }

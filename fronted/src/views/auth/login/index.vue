@@ -140,25 +140,18 @@
 
   const accounts = computed<Account[]>(() => [
     {
-      key: 'super',
-      label: t('login.roles.super'),
-      userName: 'Super',
-      password: '123456',
-      roles: ['R_SUPER']
-    },
-    {
       key: 'admin',
-      label: t('login.roles.admin'),
+      label: '交通管理员',
       userName: 'Admin',
       password: '123456',
-      roles: ['R_ADMIN']
+      roles: ['admin']
     },
     {
       key: 'user',
-      label: t('login.roles.user'),
+      label: '普通车主',
       userName: 'User',
       password: '123456',
-      roles: ['R_USER']
+      roles: ['user']
     }
   ])
 
@@ -188,7 +181,7 @@
   const loading = ref(false)
 
   onMounted(() => {
-    setupAccount('super')
+    setupAccount('admin')
   })
 
   // 设置账号
@@ -232,6 +225,14 @@
       // 存储 token 和登录状态
       userStore.setToken(token, refreshToken)
       userStore.setLoginStatus(true)
+
+      // 设置用户信息（包含角色）
+      const selectedAccount = accounts.value.find((account: Account) => account.key === formData.account)
+      userStore.setUserInfo({
+        userId: formData.account === 'admin' ? 1 : 2,
+        userName: formData.username,
+        roles: selectedAccount?.roles || ['user']
+      })
 
       // 登录成功处理
       showLoginSuccessNotice()

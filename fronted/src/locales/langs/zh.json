@@ -315,6 +315,17 @@
       "document": "官方文档",
       "liteVersion": "精简版本",
       "oldVersion": "v2.6.1 版本"
+    },
+    "admin": {
+      "title": "交通管理",
+      "map": "地图大屏",
+      "realtime": "实时数据",
+      "query": "数据查询"
+    },
+    "owner": {
+      "title": "我的车辆",
+      "map": "地图服务",
+      "records": "我的记录"
     }
   },
   "table": {

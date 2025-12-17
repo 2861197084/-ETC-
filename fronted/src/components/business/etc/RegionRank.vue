@@ -86,35 +86,37 @@ const formatNumber = (num: number) => {
 
 <style lang="scss" scoped>
 .region-rank {
-  background: rgba(0, 0, 0, 0.6);
+  background: #fff;
   border-radius: 8px;
   overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e8e8e8;
 
   .rank-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 12px 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid #f0f0f0;
 
     .rank-title {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #fff;
+      color: #1f2329;
       font-weight: 600;
       font-size: 14px;
     }
 
     :deep(.el-radio-group) {
       .el-radio-button__inner {
-        background: transparent;
-        border-color: rgba(255, 255, 255, 0.3);
-        color: rgba(255, 255, 255, 0.6);
+        background: #fff;
+        border-color: #d9d9d9;
+        color: #595959;
       }
 
       .el-radio-button__original-radio:checked + .el-radio-button__inner {
-        background: rgba(24, 144, 255, 0.3);
+        background: #e6f7ff;
         border-color: #1890ff;
         color: #1890ff;
       }
@@ -133,7 +135,7 @@ const formatNumber = (num: number) => {
     transition: background 0.3s;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.05);
+      background: #fafafa;
     }
 
     &.top-three {
@@ -151,8 +153,8 @@ const formatNumber = (num: number) => {
       border-radius: 4px;
       font-size: 12px;
       font-weight: 600;
-      background: rgba(255, 255, 255, 0.1);
-      color: rgba(255, 255, 255, 0.6);
+      background: #f5f5f5;
+      color: #8c8c8c;
 
       &.rank-1 {
         background: linear-gradient(135deg, #ffd700, #ffa500);
@@ -172,14 +174,14 @@ const formatNumber = (num: number) => {
 
     .rank-region {
       min-width: 80px;
-      color: #fff;
+      color: #1f2329;
       font-size: 13px;
     }
 
     .rank-bar-wrapper {
       flex: 1;
       height: 8px;
-      background: rgba(255, 255, 255, 0.1);
+      background: #f0f0f0;
       border-radius: 4px;
       overflow: hidden;
 
@@ -201,7 +203,7 @@ const formatNumber = (num: number) => {
         }
 
         &.bar-normal {
-          background: linear-gradient(90deg, #1890ff, #0050b3);
+          background: linear-gradient(90deg, #1890ff, #69c0ff);
         }
       }
     }
@@ -209,7 +211,7 @@ const formatNumber = (num: number) => {
     .rank-count {
       min-width: 50px;
       text-align: right;
-      color: #fff;
+      color: #1f2329;
       font-size: 13px;
       font-weight: 600;
     }
