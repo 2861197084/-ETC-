@@ -323,9 +323,12 @@ const routeForm = reactive({
 const routeResult = ref<any>(null)
 
 let autoComplete: any = null
-let geolocation: any = null
 let geocoder: any = null
+let AMapInstance: any = null  // 保存 AMap 对象
 const isLocating = ref(false)
+
+// 高德 API Key
+const AMAP_KEY = 'cdc27498b38c08c8950410d6697bcd0b'
 
 // 初始化搜索服务
 const initAutoComplete = async () => {
@@ -333,27 +336,18 @@ const initAutoComplete = async () => {
     ;(window as any)._AMapSecurityConfig = {
       securityJsCode: '7205847ef1f61e487df1d74607a26422'
     }
-    const AMap = await AMapLoader.load({
-      key: 'cdc27498b38c08c8950410d6697bcd0b',
+    AMapInstance = await AMapLoader.load({
+      key: AMAP_KEY,
       version: '2.0',
-      plugins: ['AMap.AutoComplete', 'AMap.Geolocation', 'AMap.Geocoder']
+      plugins: ['AMap.AutoComplete', 'AMap.Geocoder', 'AMap.Geolocation']
     })
-    autoComplete = new AMap.AutoComplete({
+    autoComplete = new AMapInstance.AutoComplete({
       city: '徐州市',
       citylimit: true
     })
     
-    // 初始化定位服务
-    geolocation = new AMap.Geolocation({
-      enableHighAccuracy: true, // 高精度定位
-      timeout: 10000, // 超时时间
-      buttonPosition: 'RB', // 定位按钮位置
-      zoomToAccuracy: true, // 定位成功后是否自动调整地图视野
-      GeoLocationFirst: true // 优先使用H5定位
-    })
-    
     // 初始化逆地理编码
-    geocoder = new AMap.Geocoder({
+    geocoder = new AMapInstance.Geocoder({
       city: '徐州市',
       radius: 1000
     })
@@ -362,6 +356,47 @@ const initAutoComplete = async () => {
   }
 }
 initAutoComplete()
+
+// 获取高精度定位（不使用城市级 IP 回落）
+const getHighPrecisionPosition = async (): Promise<{ lng: number; lat: number; address: string }> => {
+  try {
+    if (!AMapInstance) {
+      await initAutoComplete()
+    }
+
+    if (!AMapInstance?.Geolocation) {
+      throw new Error('定位插件未加载')
+    }
+
+    return await new Promise((resolve, reject) => {
+      const geolocation = new AMapInstance.Geolocation({
+        enableHighAccuracy: true,
+        timeout: 10000,
+        GeoLocationFirst: true,
+        noIpLocate: 3, // 禁用城市级 IP 回落
+        noGeoLocation: 0,
+        getCityWhenFail: false,
+        showButton: false,
+        zoomToAccuracy: true
+      })
+
+      geolocation.getCurrentPosition((status: string, result: any) => {
+        if (status === 'complete' && result?.position) {
+          resolve({
+            lng: result.position.lng,
+            lat: result.position.lat,
+            address: result.formattedAddress || '当前位置'
+          })
+        } else {
+          reject(new Error(result?.message || '定位失败'))
+        }
+      })
+    })
+  } catch (e) {
+    console.error('高精度定位失败:', e)
+    throw e
+  }
+}
 
 // 搜索地点
 const searchPlace = (queryString: string, cb: (results: any[]) => void) => {
@@ -479,7 +514,7 @@ const recentRecords = ref([
 // 当前位置标记
 let currentLocationMarker: any = null
 
-const locateVehicle = () => {
+const locateVehicle = async () => {
   if (!mapRef.value) {
     ElMessage.warning('地图未初始化')
     return
@@ -487,143 +522,58 @@ const locateVehicle = () => {
 
   ElMessage.info('正在获取实时位置...')
 
-  // 使用浏览器原生定位 API
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const lng = position.coords.longitude
-        const lat = position.coords.latitude
-        
-        // 移动地图到当前位置
-        mapRef.value.setCenter([lng, lat], 16)
-        
-        // 获取 AMap 对象添加标记
-        const AMap = mapRef.value.getAMap()
-        const map = mapRef.value.getMap()
-        
-        if (AMap && map) {
-          // 移除旧标记
-          if (currentLocationMarker) {
-            map.remove(currentLocationMarker)
-          }
-          
-          // 创建当前位置标记（蓝色脉冲圆点效果）
-          currentLocationMarker = new AMap.Marker({
-            position: [lng, lat],
-            content: `
-              <div class="current-location-marker">
-                <div class="pulse"></div>
-                <div class="dot"></div>
-              </div>
-            `,
-            offset: new AMap.Pixel(-15, -15),
-            zIndex: 200
-          })
-          map.add(currentLocationMarker)
-          
-          // 使用逆地理编码获取地址
-          if (geocoder) {
-            geocoder.getAddress([lng, lat], (status: string, result: any) => {
-              if (status === 'complete' && result.regeocode) {
-                const address = result.regeocode.formattedAddress
-                const shortAddress = address.replace(/^江苏省徐州市/, '') || address
-                ElMessage.success(`当前位置: ${shortAddress}`)
-              } else {
-                ElMessage.success(`定位成功: ${lng.toFixed(6)}, ${lat.toFixed(6)}`)
-              }
-            })
-          } else {
-            ElMessage.success(`定位成功: ${lng.toFixed(6)}, ${lat.toFixed(6)}`)
-          }
-        }
-      },
-      (error) => {
-        console.error('定位失败:', error)
-        let errorMsg = '定位失败'
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            errorMsg = '定位权限被拒绝，请在浏览器设置中允许定位'
-            break
-          case error.POSITION_UNAVAILABLE:
-            errorMsg = '无法获取位置信息'
-            break
-          case error.TIMEOUT:
-            errorMsg = '定位超时，请重试'
-            break
-        }
-        ElMessage.error(errorMsg)
-        
-        // 定位失败时定位到矿大南湖校区
-        mapRef.value.setCenter([117.14509, 34.214571], 16)
-        ElMessage.info('已定位到默认位置（矿大南湖校区）')
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0
+  try {
+    const { lng, lat, address } = await getHighPrecisionPosition()
+
+    // 移动地图到当前位置
+    mapRef.value.setCenter([lng, lat], 16)
+    
+    const AMap = mapRef.value.getAMap()
+    const map = mapRef.value.getMap()
+    
+    if (AMap && map) {
+      if (currentLocationMarker) {
+        map.remove(currentLocationMarker)
       }
-    )
-  } else {
-    ElMessage.error('浏览器不支持定位功能')
-    // 定位到矿大南湖校区
+      
+      currentLocationMarker = new AMap.Marker({
+        position: [lng, lat],
+        content: `
+          <div class="current-location-marker">
+            <div class="pulse"></div>
+            <div class="dot"></div>
+          </div>
+        `,
+        offset: new AMap.Pixel(-15, -15),
+        zIndex: 200
+      })
+      map.add(currentLocationMarker)
+    }
+    
+    ElMessage.success(`当前位置: ${address}`)
+  } catch (e) {
+    ElMessage.error('定位失败，已定位到默认位置')
     mapRef.value.setCenter([117.14509, 34.214571], 16)
   }
 }
 
 // 使用当前位置作为起点
-const useCurrentLocation = () => {
+const useCurrentLocation = async () => {
   isLocating.value = true
   ElMessage.info('正在获取当前位置...')
   
-  // 优先使用浏览器原生定位 API（更可靠）
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const lng = position.coords.longitude
-        const lat = position.coords.latitude
-        routeForm.originLngLat = [lng, lat]
-        
-        // 使用高德逆地理编码获取地址名称
-        if (geocoder) {
-          geocoder.getAddress([lng, lat], (geoStatus: string, geoResult: any) => {
-            isLocating.value = false
-            if (geoStatus === 'complete' && geoResult.regeocode) {
-              const address = geoResult.regeocode.formattedAddress
-              // 去掉省市前缀，只显示详细地址
-              const shortAddress = address.replace(/^江苏省徐州市/, '') || address
-              routeForm.origin = shortAddress
-              ElMessage.success('定位成功')
-            } else {
-              routeForm.origin = `${lng.toFixed(6)}, ${lat.toFixed(6)}`
-              ElMessage.success('定位成功')
-            }
-          })
-        } else {
-          isLocating.value = false
-          routeForm.origin = `${lng.toFixed(6)}, ${lat.toFixed(6)}`
-          ElMessage.success('定位成功')
-        }
-      },
-      (error) => {
-        console.error('浏览器定位失败:', error)
-        // 浏览器定位失败，使用默认徐州中心位置
-        isLocating.value = false
-        routeForm.originLngLat = [117.284124, 34.205768]
-        routeForm.origin = '徐州市中心（默认位置）'
-        ElMessage.warning('无法获取精确位置，已使用默认位置')
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0
-      }
-    )
-  } else {
-    // 浏览器不支持定位，使用默认位置
+  try {
+    const { lng, lat, address } = await getHighPrecisionPosition()
+    routeForm.originLngLat = [lng, lat]
+    routeForm.origin = address
+    ElMessage.success('定位成功')
+  } catch (e) {
+    // 定位失败，使用默认位置
+    routeForm.originLngLat = [117.14509, 34.214571]
+    routeForm.origin = '矿大南湖校区'
+    ElMessage.warning('定位失败，已使用默认位置')
+  } finally {
     isLocating.value = false
-    routeForm.originLngLat = [117.284124, 34.205768]
-    routeForm.origin = '徐州市中心（默认位置）'
-    ElMessage.warning('浏览器不支持定位，已使用默认位置')
   }
 }
 
