@@ -1,0 +1,16 @@
+mode:
+  type: Standalone
+
+authority:
+  users:
+    - user: root@%
+      password: root
+    - user: etc@%
+      password: etcpass
+  privilege:
+    type: ALL_PERMITTED
+
+props:
+  sql-show: true
+  proxy-frontend-database-protocol-type: MySQL
+

@@ -1,0 +1,25 @@
+server:
+  port: 8081
+  address: 0.0.0.0
+
+spring:
+  application:
+    name: etc-backend
+  sql:
+    init:
+      mode: never
+      enabled: false
+  redis:
+    host: 127.0.0.1
+    port: 6379
+    database: 0
+
+logging:
+  level:
+    com.etc.platform: debug
+
+# HBase and Redis configuration
+hbase:
+  zookeeper:
+    quorum: centos7-166,centos7-167,centos7-168
+    clientPort: 2181
