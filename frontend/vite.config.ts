@@ -14,7 +14,7 @@ import tailwindcss from '@tailwindcss/vite'
 export default ({ mode }: { mode: string }) => {
   const root = process.cwd()
   const env = loadEnv(mode, root)
-  const { VITE_VERSION, VITE_PORT, VITE_BASE_URL, VITE_API_URL, VITE_API_PROXY_URL } = env
+  const { VITE_VERSION, VITE_PORT, VITE_BASE_URL, VITE_API_URL } = env
 
   console.log(`🚀 API_URL = ${VITE_API_URL}`)
   console.log(`🚀 VERSION = ${VITE_VERSION}`)
@@ -28,7 +28,14 @@ export default ({ mode }: { mode: string }) => {
       port: Number(VITE_PORT),
       proxy: {
         '/api': {
-          target: VITE_API_PROXY_URL,
+          // 前端所有 /api 开头的请求，转发到本机后端 8081
+          target: 'http://localhost:8081',
+          changeOrigin: true
+        },
+        '/ws': {
+          // WebSocket 告警转发到后端
+          target: 'http://localhost:8081',
+          ws: true,
           changeOrigin: true
         }
       },
