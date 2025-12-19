@@ -1,5 +1,5 @@
 ARG FLINK_VERSION=1.20.0
-FROM public.ecr.aws/docker/library/flink:${FLINK_VERSION}-scala_2.12-java17
+FROM flink:${FLINK_VERSION}-scala_2.12-java17
 
 ARG KAFKA_CONNECTOR_VERSION=3.4.0-1.20
 

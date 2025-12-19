@@ -1,7 +1,7 @@
 ARG KAFKA_VERSION=3.8.1
 ARG SCALA_VERSION=2.13
 
-FROM public.ecr.aws/docker/library/eclipse-temurin:21-jre-jammy
+FROM eclipse-temurin:21-jre-jammy
 
 ARG KAFKA_VERSION
 ARG SCALA_VERSION

@@ -6,7 +6,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.3.4</version> <!-- ½µ¼¶µ½ÎÈ¶¨°æ£¬±ÜÃâ Spring Boot 4.0 Óë MyBatis-Plus ¼æÈÝÎÊÌâ -->
+        <version>3.3.4</version> <!-- ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È¶ï¿½ï¿½æ£¬ï¿½ï¿½ï¿½ï¿½ Spring Boot 4.0 ï¿½ï¿½ MyBatis-Plus ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ -->
         <relativePath/>
     </parent>
 
@@ -14,12 +14,12 @@
     <artifactId>etc-backend</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>etc-backend</name>
-    <description>¸ßËÙ¹«Â·ETC´óÊý¾Ý¹ÜÀíÆ½Ì¨ - ºó¶Ë·þÎñ£¨HBase´æ´¢£©</description>
+    <description>ï¿½ï¿½ï¿½Ù¹ï¿½Â·ETCï¿½ï¿½ï¿½ï¿½ï¿½Ý¹ï¿½ï¿½ï¿½Æ½Ì¨ - ï¿½ï¿½Ë·ï¿½ï¿½ï¿½HBaseï¿½æ´¢ï¿½ï¿½</description>
 
     <properties>
         <java.version>21</java.version>
         <hbase.version>2.5.4</hbase.version>
-        <springdoc.version>2.5.0</springdoc.version> <!-- Spring Boot 3.x ÓÃ 2.x °æ Swagger -->
+        <springdoc.version>2.5.0</springdoc.version> <!-- Spring Boot 3.x ï¿½ï¿½ 2.x ï¿½ï¿½ Swagger -->
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     </properties>
@@ -31,19 +31,38 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
-        <!-- WebSocket ÊµÊ±¸æ¾¯ÍÆËÍ -->
+        <!-- Spring Data JPA -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+
+        <!-- MySQL Driver -->
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- WebSocket å®žæ—¶å‘Šè­¦æŽ¨é€ -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-websocket</artifactId>
         </dependency>
 
-        <!-- Redis »º´æÊµÊ±Í³¼Æ -->
+        <!-- Redis ç¼“å­˜å®žæ—¶ç»Ÿè®¡ -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
 
-        <!-- HBase Shaded Client: °üº¬Óë Hadoop µÄ¸ôÀë£¬ÊÊºÏ¶ÀÁ¢¿Í»§¶ËÓ¦ÓÃ -->
+        <!-- Kafka -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+
+        <!-- HBase Shaded Client: ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Hadoop ï¿½Ä¸ï¿½ï¿½ë£¬ï¿½ÊºÏ¶ï¿½ï¿½ï¿½ï¿½Í»ï¿½ï¿½ï¿½Ó¦ï¿½ï¿½ -->
         <dependency>
             <groupId>org.apache.hbase</groupId>
             <artifactId>hbase-shaded-client</artifactId>
@@ -70,14 +89,14 @@
             <artifactId>jackson-datatype-jsr310</artifactId>
         </dependency>
 
-        <!-- Swagger3 ½Ó¿ÚÎÄµµ -->
+        <!-- Swagger3 ï¿½Ó¿ï¿½ï¿½Äµï¿½ -->
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>${springdoc.version}</version>
         </dependency>
 
-        <!-- ÈÈ²¿Êð -->
+        <!-- ï¿½È²ï¿½ï¿½ï¿½ -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-devtools</artifactId>
@@ -85,7 +104,7 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- ²âÊÔ -->
+        <!-- ï¿½ï¿½ï¿½ï¿½ -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
@@ -95,7 +114,7 @@
 
     <build>
         <plugins>
-            <!-- ×ÊÔ´±àÂëÅäÖÃ -->
+            <!-- ï¿½ï¿½Ô´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-resources-plugin</artifactId>
@@ -105,7 +124,7 @@
                 </configuration>
             </plugin>
 
-            <!-- ±àÒë±àÂëÅäÖÃ -->
+            <!-- ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -116,7 +135,7 @@
                 </configuration>
             </plugin>
 
-            <!-- Spring Boot ´ò°ü²å¼þ -->
+            <!-- Spring Boot ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>

@@ -1,25 +1,74 @@
 server:
   port: 8081
   address: 0.0.0.0
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
 
 spring:
   application:
     name: etc-backend
-  sql:
-    init:
-      mode: never
-      enabled: false
-  redis:
-    host: 127.0.0.1
-    port: 6379
-    database: 0
+  
+  # MySQL 数据源配置 (连接 Docker 集群)
+  datasource:
+    url: jdbc:mysql://localhost:13306/etc_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=utf8&useUnicode=true
+    username: root
+    password: etc123456
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 30000
+      connection-timeout: 30000
+      max-lifetime: 1800000
+      connection-init-sql: SET NAMES utf8mb4
+  
+  # Redis 配置
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: etc123456
+      database: 0
+      timeout: 5000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 2
+          max-wait: -1ms
+
+  # JPA 配置
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
 
 logging:
   level:
     com.etc.platform: debug
+    org.springframework.data: debug
 
-# HBase and Redis configuration
+# HBase 配置 (连接 Docker 集群)
 hbase:
+  enabled: true
   zookeeper:
-    quorum: centos7-166,centos7-167,centos7-168
+    quorum: localhost
     clientPort: 2181
+  thrift:
+    host: localhost
+    port: 9090
+
+# Kafka 配置
+kafka:
+  bootstrap-servers: localhost:9092
+  topics:
+    pass-record: etc-pass-record
+    alert: etc-alert
+    flow-stats: etc-flow-stats

@@ -234,6 +234,18 @@ import {
   MagicStick, Document, CaretRight 
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import { searchRecords, text2sql, executeQuery } from '@/api/admin/query'
+
+// 本地卡口配置映射（解决后端中文乱码问题）
+const checkpointNameMap: Record<number, string> = {
+  1: '苏皖界1(104省道)', 2: '苏皖界2(311国道)', 3: '苏皖界3(徐明高速)',
+  4: '苏皖界4(宿新高速)', 5: '苏皖界5(徐淮高速)', 6: '苏皖界6(新扬高速)',
+  7: '苏鲁界1(206国道)', 8: '苏鲁界2(104国道)', 9: '苏鲁界3(京台高速)',
+  10: '苏鲁界4(枣庄连接线)', 11: '苏鲁界5(京沪高速)', 12: '苏鲁界6(沂河路)',
+  13: '连云港界1(徐连高速)', 14: '连云港界2(310国道)', 15: '宿迁界1(徐宿高速)',
+  16: '宿迁界2(徐宿快速)', 17: '宿迁界3(104国道)', 18: '宿迁界4(新扬高速)',
+  19: '宿迁界5(徐盐高速)'
+}
 
 defineOptions({ name: 'EtcQuery' })
 
@@ -303,20 +315,118 @@ const handleQuickQuery = async () => {
   queryLoading.value = true
   const startTime = Date.now()
   
-  await new Promise(resolve => setTimeout(resolve, 600))
+  try {
+    // 构建查询参数
+    const params: Record<string, any> = {
+      page: currentPage.value,
+      pageSize: pageSize.value,
+      queryType: queryType.value // 告诉后端查询类型
+    }
+    
+    if (filters.dateRange && filters.dateRange.length === 2) {
+      params.startTime = (filters.dateRange[0] as Date).toISOString()
+      params.endTime = (filters.dateRange[1] as Date).toISOString()
+    }
+    if (filters.stationId) params.checkpointId = filters.stationId
+    if (filters.vehicleType) params.vehicleType = filters.vehicleType
+    if (filters.plateNumber) params.plateNumber = filters.plateNumber
+    
+    // 根据查询类型添加特定参数
+    if (queryType.value === 'speed') {
+      params.minSpeed = filters.speedThreshold
+    } else if (queryType.value === 'violation') {
+      params.violationType = filters.violationType || null
+    }
+    
+    console.log('🔍 查询参数:', params, '查询类型:', queryType.value)
+    const res = await searchRecords(params)
+    console.log('📋 查询响应:', res)
+    
+    if (res.code === 200 && res.data) {
+      // 根据查询类型设置不同的列
+      setColumnsForQueryType(queryType.value)
+      // 将 checkpointId 映射为卡口名称（解决后端中文乱码）
+      queryResult.value = (res.data.list || []).map((item: any) => ({
+        ...item,
+        checkpointName: checkpointNameMap[item.checkpointId] || `卡口${item.checkpointId}`
+      }))
+      totalCount.value = res.data.total || 0
+      queryTime.value = Date.now() - startTime
+      console.log('✅ 查询结果:', queryResult.value.length, '条')
+      
+      addToHistory('quick', getQueryDesc())
+      ElMessage.success(`查询完成，共 ${totalCount.value} 条记录`)
+    } else {
+      ElMessage.error(res.msg || '查询失败')
+    }
+  } catch (e: any) {
+    console.error('查询失败:', e)
+    ElMessage.error(e.message || '查询失败')
+  } finally {
+    queryLoading.value = false
+  }
+}
+
+// 根据查询类型设置表格列
+const setColumnsForQueryType = (type: string) => {
+  const baseColumns = [
+    { prop: 'plateNumber', label: '车牌号', width: 120 },
+    { prop: 'checkpointName', label: '卡口名称', width: 160 },
+    { prop: 'passTime', label: '通过时间', width: 180 }
+  ]
   
-  // 根据查询类型生成模拟数据
-  const result = generateMockData(queryType.value)
-  tableColumns.value = result.columns
-  queryResult.value = result.data
-  totalCount.value = result.total
-  queryTime.value = Date.now() - startTime
-  
-  // 添加到历史
-  addToHistory('quick', getQueryDesc())
-  
-  queryLoading.value = false
-  ElMessage.success(`查询完成，共 ${result.total} 条记录`)
+  switch (type) {
+    case 'traffic':
+      tableColumns.value = [
+        ...baseColumns,
+        { prop: 'direction', label: '方向', width: 80 },
+        { prop: 'vehicleType', label: '车辆类型', width: 100 },
+        { prop: 'laneNo', label: '车道', width: 80 }
+      ]
+      break
+    case 'revenue':
+      tableColumns.value = [
+        ...baseColumns,
+        { prop: 'vehicleType', label: '车辆类型', width: 100 },
+        { prop: 'etcDeduction', label: '扣款金额(元)', width: 120, sortable: true }
+      ]
+      break
+    case 'violation':
+      tableColumns.value = [
+        { prop: 'plateNumber', label: '车牌号', width: 120 },
+        { prop: 'checkpointName', label: '卡口名称', width: 160 },
+        { prop: 'passTime', label: '违章时间', width: 180 },
+        { prop: 'violationType', label: '违章类型', width: 100 },
+        { prop: 'speed', label: '实测速度', width: 100 },
+        { prop: 'status', label: '状态', width: 80 }
+      ]
+      break
+    case 'speed':
+      tableColumns.value = [
+        ...baseColumns,
+        { prop: 'speed', label: '速度(km/h)', width: 120, sortable: true },
+        { prop: 'direction', label: '方向', width: 80 },
+        { prop: 'vehicleType', label: '车辆类型', width: 100 }
+      ]
+      break
+    case 'clone':
+      tableColumns.value = [
+        { prop: 'plateNumber', label: '嫌疑车牌号', width: 120 },
+        { prop: 'checkpointName', label: '最近出现卡口', width: 160 },
+        { prop: 'passTime', label: '最近时间', width: 180 },
+        { prop: 'appearCount', label: '出现次数', width: 100 },
+        { prop: 'suspectReason', label: '嫌疑原因', width: 200 }
+      ]
+      break
+    default:
+      tableColumns.value = [
+        ...baseColumns,
+        { prop: 'direction', label: '方向', width: 80 },
+        { prop: 'speed', label: '速度(km/h)', width: 100, sortable: true },
+        { prop: 'vehicleType', label: '车辆类型', width: 100 },
+        { prop: 'laneNo', label: '车道', width: 80 }
+      ]
+  }
 }
 
 // Text2SQL
@@ -327,59 +437,32 @@ const handleText2Sql = async () => {
   }
   
   text2sqlLoading.value = true
-  await new Promise(resolve => setTimeout(resolve, 1200))
   
-  // 模拟生成 SQL
-  const query = naturalLanguageQuery.value.toLowerCase()
-  if (query.includes('车流量') || query.includes('流量')) {
-    generatedSql.value = `SELECT 
-  s.station_name AS 站点名称,
-  COUNT(*) AS 车流量,
-  SUM(CASE WHEN v.type = 1 THEN 1 ELSE 0 END) AS 小型车,
-  SUM(CASE WHEN v.type IN (2,3,4) THEN 1 ELSE 0 END) AS 大型车
-FROM etc_records r
-JOIN stations s ON r.station_id = s.id
-JOIN vehicles v ON r.vehicle_id = v.id
-WHERE r.pass_time >= CURDATE()
-GROUP BY s.id
-ORDER BY 车流量 DESC;`
-  } else if (query.includes('超速')) {
-    generatedSql.value = `SELECT 
-  r.plate_number AS 车牌号,
-  r.speed AS 时速,
-  s.station_name AS 检测站点,
-  r.pass_time AS 检测时间
-FROM etc_records r
-JOIN stations s ON r.station_id = s.id
-WHERE r.speed > 120
-  AND r.pass_time >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
-ORDER BY r.speed DESC
-LIMIT 100;`
-  } else if (query.includes('套牌')) {
-    generatedSql.value = `SELECT 
-  a.plate_number AS 车牌号,
-  a.station_name AS 位置A,
-  a.pass_time AS 时间A,
-  b.station_name AS 位置B,
-  b.pass_time AS 时间B,
-  TIMESTAMPDIFF(MINUTE, a.pass_time, b.pass_time) AS 间隔分钟
-FROM etc_records_view a
-JOIN etc_records_view b 
-  ON a.plate_number = b.plate_number 
-  AND a.id < b.id
-  AND TIMESTAMPDIFF(MINUTE, a.pass_time, b.pass_time) < 10
-  AND a.station_id != b.station_id
-WHERE a.pass_time >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
-ORDER BY a.pass_time DESC;`
-  } else {
-    generatedSql.value = `SELECT * FROM etc_records 
-WHERE pass_time >= CURDATE()
-ORDER BY pass_time DESC
-LIMIT 100;`
+  try {
+    const res = await text2sql({ query: naturalLanguageQuery.value })
+    
+    if (res.code === 200 && res.data) {
+      generatedSql.value = res.data.sql || ''
+      editMode.value = false
+      ElMessage.success('SQL 生成成功')
+    } else {
+      ElMessage.error(res.msg || 'SQL 生成失败')
+    }
+  } catch (e: any) {
+    console.error('Text2SQL 失败:', e)
+    // 降级：使用本地模板
+    const query = naturalLanguageQuery.value.toLowerCase()
+    if (query.includes('车流量') || query.includes('流量')) {
+      generatedSql.value = `SELECT checkpoint_id, COUNT(*) as count FROM pass_record WHERE pass_time >= CURDATE() GROUP BY checkpoint_id ORDER BY count DESC`
+    } else if (query.includes('超速')) {
+      generatedSql.value = `SELECT plate_number, speed, checkpoint_id, pass_time FROM pass_record WHERE speed > 120 ORDER BY speed DESC LIMIT 100`
+    } else {
+      generatedSql.value = `SELECT * FROM pass_record ORDER BY pass_time DESC LIMIT 100`
+    }
+    editMode.value = false
+  } finally {
+    text2sqlLoading.value = false
   }
-  
-  text2sqlLoading.value = false
-  editMode.value = false
 }
 
 // 执行 SQL
@@ -389,104 +472,31 @@ const executeSql = async () => {
   queryLoading.value = true
   const startTime = Date.now()
   
-  await new Promise(resolve => setTimeout(resolve, 800))
-  
-  const result = generateMockData('traffic')
-  tableColumns.value = result.columns
-  queryResult.value = result.data
-  totalCount.value = result.total
-  queryTime.value = Date.now() - startTime
-  
-  addToHistory('sql', naturalLanguageQuery.value.substring(0, 30) + '...')
-  
-  queryLoading.value = false
-}
-
-// 生成模拟数据
-const generateMockData = (type: string) => {
-  switch (type) {
-    case 'traffic':
-      return {
-        columns: [
-          { prop: 'station', label: '站点名称', width: 160 },
-          { prop: 'total', label: '总车流', width: 100, sortable: true },
-          { prop: 'small', label: '小型车', width: 100 },
-          { prop: 'large', label: '大型车', width: 100 },
-          { prop: 'avgSpeed', label: '平均车速', width: 100 }
-        ],
-        data: [
-          { station: '徐州东站', total: 12580, small: 9850, large: 2730, avgSpeed: '78 km/h' },
-          { station: '铜山收费站', total: 8960, small: 7200, large: 1760, avgSpeed: '82 km/h' },
-          { station: '贾汪收费站', total: 6540, small: 5100, large: 1440, avgSpeed: '75 km/h' },
-          { station: '新沂收费站', total: 5230, small: 4200, large: 1030, avgSpeed: '80 km/h' },
-          { station: '邳州收费站', total: 4890, small: 3900, large: 990, avgSpeed: '79 km/h' }
-        ],
-        total: 5
-      }
-    case 'revenue':
-      return {
-        columns: [
-          { prop: 'station', label: '站点名称', width: 160 },
-          { prop: 'revenue', label: '营收(元)', width: 120, sortable: true },
-          { prop: 'count', label: '交易笔数', width: 100 },
-          { prop: 'avgFee', label: '平均费用', width: 100 }
-        ],
-        data: [
-          { station: '徐州东站', revenue: 156780, count: 4520, avgFee: '34.68' },
-          { station: '铜山收费站', revenue: 98560, count: 2890, avgFee: '34.10' },
-          { station: '贾汪收费站', revenue: 76540, count: 2250, avgFee: '34.02' },
-          { station: '新沂收费站', revenue: 65890, count: 1960, avgFee: '33.62' },
-          { station: '邳州收费站', revenue: 58760, count: 1780, avgFee: '33.01' }
-        ],
-        total: 5
-      }
-    case 'speed':
-      return {
-        columns: [
-          { prop: 'plate', label: '车牌号', width: 120 },
-          { prop: 'speed', label: '时速', width: 100, sortable: true },
-          { prop: 'station', label: '检测站点', width: 140 },
-          { prop: 'time', label: '检测时间', width: 160 },
-          { prop: 'type', label: '车辆类型', width: 100 }
-        ],
-        data: [
-          { plate: '苏C·A1234', speed: 158, station: '徐州东站', time: '2025-12-17 14:32', type: '小型车' },
-          { plate: '苏C·B5678', speed: 152, station: '铜山收费站', time: '2025-12-17 13:28', type: '小型车' },
-          { plate: '鲁D·C9012', speed: 145, station: '贾汪收费站', time: '2025-12-17 12:15', type: '小型车' },
-          { plate: '苏C·D3456', speed: 138, station: '新沂收费站', time: '2025-12-17 11:42', type: '中型车' }
-        ],
-        total: 4
-      }
-    case 'clone':
-      return {
-        columns: [
-          { prop: 'plate', label: '车牌号', width: 120 },
-          { prop: 'stationA', label: '位置A', width: 130 },
-          { prop: 'timeA', label: '时间A', width: 150 },
-          { prop: 'stationB', label: '位置B', width: 130 },
-          { prop: 'timeB', label: '时间B', width: 150 },
-          { prop: 'interval', label: '间隔', width: 80 }
-        ],
-        data: [
-          { plate: '苏C·X7890', stationA: '徐州东站', timeA: '14:28:32', stationB: '铜山收费站', timeB: '14:35:18', interval: '7分钟' },
-          { plate: '鲁D·Y4567', stationA: '贾汪收费站', timeA: '13:15:45', stationB: '新沂收费站', timeB: '13:22:10', interval: '6分钟' }
-        ],
-        total: 2
-      }
-    default:
-      return {
-        columns: [
-          { prop: 'plate', label: '车牌号', width: 120 },
-          { prop: 'type', label: '违章类型', width: 100 },
-          { prop: 'station', label: '检测站点', width: 140 },
-          { prop: 'time', label: '时间', width: 160 }
-        ],
-        data: [
-          { plate: '苏C·V1234', type: '超速', station: '徐州东站', time: '2025-12-17 14:20' },
-          { plate: '鲁D·W5678', type: '占用应急车道', station: '铜山收费站', time: '2025-12-17 13:45' }
-        ],
-        total: 2
-      }
+  try {
+    const res = await executeQuery({ sql: generatedSql.value })
+    
+    if (res.code === 200 && res.data) {
+      // 动态生成列
+      const columns = res.data.columns || []
+      tableColumns.value = columns.map((col: string) => ({
+        prop: col,
+        label: col,
+        width: 120
+      }))
+      queryResult.value = res.data.data || []
+      totalCount.value = res.data.total || queryResult.value.length
+      queryTime.value = Date.now() - startTime
+      
+      addToHistory('sql', naturalLanguageQuery.value.substring(0, 30) + '...')
+      ElMessage.success(`查询完成，共 ${totalCount.value} 条记录`)
+    } else {
+      ElMessage.error(res.msg || 'SQL 执行失败')
+    }
+  } catch (e: any) {
+    console.error('SQL 执行失败:', e)
+    ElMessage.error(e.message || 'SQL 执行失败')
+  } finally {
+    queryLoading.value = false
   }
 }
 

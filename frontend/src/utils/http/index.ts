@@ -211,4 +211,48 @@ const api = {
   }
 }
 
+/**
+ * 返回完整响应的请求函数（用于需要访问 code/msg 的场景）
+ */
+async function requestWithFullResponse<T = any>(config: ExtendedAxiosRequestConfig): Promise<BaseResponse<T>> {
+  if (
+    ['POST', 'PUT'].includes(config.method?.toUpperCase() || '') &&
+    config.params &&
+    !config.data
+  ) {
+    config.data = config.params
+    config.params = undefined
+  }
+
+  try {
+    const res = await axiosInstance.request<BaseResponse<T>>(config)
+    return res.data
+  } catch (error) {
+    if (error instanceof HttpError && error.code !== ApiStatus.unauthorized) {
+      const showMsg = config.showErrorMessage !== false
+      showError(error, showMsg)
+    }
+    return Promise.reject(error)
+  }
+}
+
+/**
+ * 简化的 HTTP 工具（用于 admin/owner API）
+ * 返回完整响应 { code, msg, data }
+ */
+export const http = {
+  get<T>(url: string, params?: Record<string, any>): Promise<BaseResponse<T>> {
+    return requestWithFullResponse<T>({ url, params, method: 'GET' })
+  },
+  post<T>(url: string, data?: Record<string, any>): Promise<BaseResponse<T>> {
+    return requestWithFullResponse<T>({ url, data, method: 'POST' })
+  },
+  put<T>(url: string, data?: Record<string, any>): Promise<BaseResponse<T>> {
+    return requestWithFullResponse<T>({ url, data, method: 'PUT' })
+  },
+  delete<T>(url: string, params?: Record<string, any>): Promise<BaseResponse<T>> {
+    return requestWithFullResponse<T>({ url, params, method: 'DELETE' })
+  }
+}
+
 export default api

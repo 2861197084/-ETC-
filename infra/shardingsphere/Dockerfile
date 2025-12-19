@@ -1,7 +1,7 @@
 ARG SHARDINGSPHERE_VERSION=5.5.0
 ARG MYSQL_CONNECTOR_VERSION=8.4.0
 
-FROM public.ecr.aws/docker/library/eclipse-temurin:21-jre-jammy
+FROM eclipse-temurin:21-jre-jammy
 
 ARG SHARDINGSPHERE_VERSION
 ARG MYSQL_CONNECTOR_VERSION

@@ -1,0 +1,50 @@
+# ETC 大数据管理平台 - 精简版集群配置
+# 仅包含核心服务，适合网络受限环境
+
+services:
+  # ==================== MySQL 主节点 ====================
+  mysql-1:
+    image: mysql:8.0
+    container_name: etc-mysql-1
+    hostname: mysql-1
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: etc123456
+      MYSQL_DATABASE: etc_db
+      MYSQL_USER: etc_user
+      MYSQL_PASSWORD: etc123456
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql1-data:/var/lib/mysql
+      - ./init/mysql:/docker-entrypoint-initdb.d
+    networks:
+      - etc-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-petc123456"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==================== Redis ====================
+  redis-1:
+    image: redis:7-alpine
+    container_name: etc-redis-1
+    hostname: redis-1
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass etc123456
+    volumes:
+      - redis1-data:/data
+    networks:
+      - etc-network
+
+networks:
+  etc-network:
+    driver: bridge
+
+volumes:
+  mysql1-data:
+  redis1-data:

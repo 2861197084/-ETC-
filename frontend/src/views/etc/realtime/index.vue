@@ -175,57 +175,140 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, watch } from 'vue'
 import { Van, Money, Odometer, Warning, Location, Bell, TrendCharts, MagicStick } from '@element-plus/icons-vue'
+import { getDailyStats, getViolations, getClonePlates, getPressureWarnings } from '@/api/admin/realtime'
+import { getCheckpoints } from '@/api/admin/map'
 
 defineOptions({ name: 'EtcRealtime' })
 
 // 统计数据
 const stats = reactive({
-  todayTotal: 128456,
-  todayRevenue: 2568900,
-  avgSpeed: 85,
-  alertCount: 12
+  todayTotal: 0,
+  todayRevenue: 0,
+  avgSpeed: 0,
+  alertCount: 0
 })
 
 // 套牌车检测
-const clonePlates = ref([
-  {
-    id: 1,
-    plateNumber: '苏C·12345',
-    location1: '徐州东站卡口',
-    time1: '14:28:35',
-    location2: '铜山收费站',
-    time2: '14:32:18'
-  },
-  {
-    id: 2,
-    plateNumber: '苏C·88888',
-    location1: '云龙湖卡口',
-    time1: '14:35:12',
-    location2: '新城区卡口',
-    time2: '14:36:45'
-  }
-])
+const clonePlates = ref<any[]>([])
 
 // 违禁类型筛选
 const violationType = ref('all')
 
 // 违禁信息列表
-const violations = ref([
-  { plateNumber: '苏C·66666', vehicleType: '小型车', violation: '超速 138km/h', violationType: 'overspeed', checkpoint: '徐州东站', time: '2025-12-17 14:20:33' },
-  { plateNumber: '皖A·11111', vehicleType: '大型车', violation: '超载 15%', violationType: 'overload', checkpoint: '铜山收费站', time: '2025-12-17 14:15:22' },
-  { plateNumber: '鲁B·99999', vehicleType: '中型车', violation: '逆行', violationType: 'illegal', checkpoint: '北站卡口', time: '2025-12-17 14:10:15' },
-  { plateNumber: '苏C·77777', vehicleType: '小型车', violation: '超速 125km/h', violationType: 'overspeed', checkpoint: '南站卡口', time: '2025-12-17 14:05:08' }
-])
+const violations = ref<any[]>([])
 
 // 站口压力预警
-const pressureWarnings = ref([
-  { id: 1, stationName: '徐州东站', level: 'danger', pressure: 95, currentFlow: 2850, predictedFlow: 3200, suggestion: '建议开启备用车道，调配警力疏导' },
-  { id: 2, stationName: '铜山收费站', level: 'warning', pressure: 75, currentFlow: 2100, predictedFlow: 2400, suggestion: '预计30分钟后达到高峰，建议提前准备' },
-  { id: 3, stationName: '云龙湖卡口', level: 'normal', pressure: 45, currentFlow: 1200, predictedFlow: 1350, suggestion: '' },
-  { id: 4, stationName: '新城区卡口', level: 'normal', pressure: 35, currentFlow: 980, predictedFlow: 1100, suggestion: '' }
-])
+const pressureWarnings = ref<any[]>([])
+
+// 加载统计数据
+const loadStats = async () => {
+  try {
+    const res = await getDailyStats()
+    if (res.code === 200 && res.data) {
+      const data = res.data as any
+      stats.todayTotal = data.totalFlow || 0
+      stats.todayRevenue = data.totalRevenue || 0
+      stats.avgSpeed = data.avgSpeed || 85
+      stats.alertCount = data.alertCount || 0
+    }
+  } catch (e) {
+    console.error('加载统计失败:', e)
+  }
+}
+
+// 加载套牌车检测
+const loadClonePlates = async () => {
+  try {
+    const res = await getClonePlates({ pageSize: 5 })
+    if (res.code === 200 && res.data?.list) {
+      clonePlates.value = res.data.list.map((item: any) => ({
+        id: item.id,
+        plateNumber: item.plateNumber,
+        location1: item.checkpoint1 || '卡口A',
+        time1: item.time1 ? new Date(item.time1).toLocaleTimeString('zh-CN') : '--',
+        location2: item.checkpoint2 || '卡口B',
+        time2: item.time2 ? new Date(item.time2).toLocaleTimeString('zh-CN') : '--'
+      }))
+    }
+  } catch (e) {
+    console.error('加载套牌检测失败:', e)
+  }
+}
+
+// 加载违禁信息
+const loadViolations = async () => {
+  try {
+    // 传递违禁类型过滤器
+    const params: Record<string, any> = { pageSize: 10 }
+    if (violationType.value !== 'all') {
+      params.type = violationType.value
+    }
+    const res = await getViolations(params)
+    if (res.code === 200 && res.data?.list) {
+      violations.value = res.data.list.map((item: any) => ({
+        plateNumber: item.plateNumber,
+        vehicleType: item.vehicleType || '小型车',
+        violation: item.description || item.type,
+        violationType: item.type || 'illegal',
+        checkpoint: item.checkpointName || item.checkpoint || '未知卡口',
+        time: item.detectTime || item.time ? new Date(item.detectTime || item.time).toLocaleString('zh-CN') : '--'
+      }))
+    }
+  } catch (e) {
+    console.error('加载违禁信息失败:', e)
+  }
+}
+
+// 加载站口压力预警 - 显示全部19个卡口
+const loadPressureWarnings = async () => {
+  try {
+    // 使用专门的压力预警接口
+    const res = await getPressureWarnings()
+    if (res.code === 200 && res.data) {
+      // 后端已返回全部19个卡口，不再slice
+      pressureWarnings.value = res.data.map((item: any) => ({
+        id: item.id,
+        stationName: item.stationName,
+        level: item.level || 'normal',
+        pressure: item.pressure || 0,
+        currentFlow: item.currentFlow || 0,
+        predictedFlow: item.predictedFlow || 0,
+        suggestion: item.suggestion || ''
+      }))
+    }
+  } catch (e) {
+    console.error('加载压力预警失败:', e)
+  }
+}
+
+// 监听违禁类型变化，重新加载数据
+watch(violationType, () => {
+  loadViolations()
+})
+
+// 加载所有数据
+const loadAllData = async () => {
+  await Promise.all([
+    loadStats(),
+    loadClonePlates(),
+    loadViolations(),
+    loadPressureWarnings()
+  ])
+}
+
+let refreshTimer: number | null = null
+
+onMounted(() => {
+  loadAllData()
+  // 每30秒刷新
+  refreshTimer = window.setInterval(loadAllData, 30000)
+})
+
+onUnmounted(() => {
+  if (refreshTimer) clearInterval(refreshTimer)
+})
 
 const getViolationTagType = (type: string) => {
   const types: Record<string, string> = {

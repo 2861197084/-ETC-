@@ -32,6 +32,16 @@ export default ({ mode }: { mode: string }) => {
           target: 'http://localhost:8081',
           changeOrigin: true
         },
+        '/admin': {
+          // 管理员接口转发到后端
+          target: 'http://localhost:8081',
+          changeOrigin: true
+        },
+        '/owner': {
+          // 车主接口转发到后端
+          target: 'http://localhost:8081',
+          changeOrigin: true
+        },
         '/ws': {
           // WebSocket 告警转发到后端
           target: 'http://localhost:8081',

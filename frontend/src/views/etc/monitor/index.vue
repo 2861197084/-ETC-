@@ -128,6 +128,9 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { Sunny, Van, Money, Odometer, Connection, Warning } from '@element-plus/icons-vue'
 import { XuzhouTrafficMap, BloomStats, RegionRank, AlertTicker } from '@/components/business/etc'
+import { getDailyStats, getViolations, getClonePlates } from '@/api/admin/realtime'
+import { getCheckpoints } from '@/api/admin/map'
+import { checkpoints as localCheckpoints } from '@/config/checkpoints'
 
 defineOptions({ name: 'EtcMonitor' })
 
@@ -141,44 +144,136 @@ const currentDate = ref('')
 // 选中的收费站
 const selectedStation = ref<any>(null)
 
-// 布隆过滤器统计数据
+// 布隆过滤器统计数据（本地/外地车辆）
 const bloomData = ref({
-  local: 89120,
-  foreign: 39336
+  local: 0,
+  foreign: 0
 })
 
-// 区域排名数据（改为徐州区域）
-const regionRankData = ref([
-  { region: '云龙区', count: 23456, trend: 12 },
-  { region: '鼓楼区', count: 21234, trend: -5 },
-  { region: '泉山区', count: 18765, trend: 8 },
-  { region: '铜山区', count: 15432, trend: 15 },
-  { region: '贾汪区', count: 12345, trend: -3 },
-  { region: '沛县', count: 11234, trend: 6 },
-  { region: '丰县', count: 9876, trend: -8 },
-  { region: '睢宁县', count: 8765, trend: 4 },
-  { region: '邳州市', count: 5432, trend: 2 },
-  { region: '新沂市', count: 4321, trend: -1 }
-])
+// 区域排名数据
+const regionRankData = ref<{ region: string; count: number; trend: number }[]>([])
 
-// 告警列表（改为徐州车牌）
-const alertList = ref([
-  { id: '1', type: 'overspeed' as const, message: '检测到超速车辆，时速152km/h', plate: '苏C·88888', time: '14:32', speed: 152 },
-  { id: '2', type: 'duplicate' as const, message: '发现套牌嫌疑车辆', plate: '苏C·12345', time: '14:28' },
-  { id: '3', type: 'dispatch' as const, message: '已派出警力前往处置', plate: '苏C·88888', time: '14:35' },
-  { id: '4', type: 'illegal' as const, message: '检测到违法占用应急车道', plate: '京C·66666', time: '14:20' },
-  { id: '5', type: 'overspeed' as const, message: '检测到超速车辆，时速138km/h', plate: '冀A·11111', time: '14:15', speed: 138 }
-])
+// 告警列表
+const alertList = ref<{ id: string; type: 'overspeed' | 'duplicate' | 'dispatch' | 'illegal'; message: string; plate: string; time: string; speed?: number }[]>([])
 
 // 底部指标数据
 const metrics = ref({
-  todayTotal: 128456,
-  todayRevenue: 2856789,
-  avgSpeed: 92.3,
-  onlineStations: 156,
-  totalStations: 162,
-  alertCount: 23
+  todayTotal: 0,
+  todayRevenue: 0,
+  avgSpeed: 0,
+  onlineStations: 0,
+  totalStations: 0,
+  alertCount: 0
 })
+
+// 加载统计数据
+const loadDailyStats = async () => {
+  try {
+    console.log('🔄 开始加载日统计数据...')
+    const res = await getDailyStats()
+    console.log('📊 日统计响应:', res)
+    if (res.code === 200 && res.data) {
+      const data = res.data as any
+      metrics.value = {
+        todayTotal: data.totalFlow || 0,
+        todayRevenue: data.totalRevenue || 0,
+        avgSpeed: data.avgSpeed || 85.6,
+        onlineStations: data.onlineCount || 0,
+        totalStations: data.checkpointCount || 0,
+        alertCount: data.alertCount || 0
+      }
+    }
+  } catch (e) {
+    console.error('加载日统计失败:', e)
+  }
+}
+
+// 加载区域排名
+const loadRegionRank = async () => {
+  try {
+    console.log('🔄 开始加载区域排名...')
+    const res = await getCheckpoints()
+    console.log('🗺️ 卡口数据响应:', res)
+    if (res.code === 200 && res.data) {
+      // 卡口ID到区域名称的映射（解决后端中文乱码）
+      const regionByCheckpointId: Record<number, string> = {
+        1: '睢宁县', 2: '铜山区', 3: '铜山区', 4: '睢宁县', 5: '沛县', 6: '新沂市',
+        7: '沛县', 8: '邳州市', 9: '贾汪区', 10: '邳州市', 11: '邳州市', 12: '新沂市',
+        13: '邳州市', 14: '邳州市', 15: '铜山区', 16: '铜山区', 17: '睢宁县',
+        18: '睢宁县', 19: '睢宁县'
+      }
+      
+      // 按区域分组统计流量
+      const regionMap = new Map<string, number>()
+      res.data.forEach((cp: any) => {
+        const region = regionByCheckpointId[cp.id] || '其他'
+        regionMap.set(region, (regionMap.get(region) || 0) + (cp.currentFlow || 0))
+      })
+      // 转为数组并排序
+      regionRankData.value = Array.from(regionMap.entries())
+        .map(([region, count]) => ({
+          region,
+          count,
+          trend: Math.floor(Math.random() * 20) - 10 // 暂用随机趋势
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10)
+      console.log('📊 区域排名:', regionRankData.value)
+      // 计算本地/外地车辆（本地按70%估算）
+      const total = res.data.reduce((sum: number, cp: any) => sum + (cp.currentFlow || 0), 0)
+      bloomData.value = {
+        local: Math.floor(total * 0.7),
+        foreign: Math.floor(total * 0.3)
+      }
+    }
+  } catch (e) {
+    console.error('加载区域排名失败:', e)
+  }
+}
+
+// 加载告警数据
+const loadAlerts = async () => {
+  try {
+    // 获取违规信息
+    const [violationsRes, clonePlatesRes] = await Promise.all([
+      getViolations({ pageSize: 5 }),
+      getClonePlates({ pageSize: 3 })
+    ])
+    
+    const alerts: typeof alertList.value = []
+    
+    // 处理违规信息
+    if (violationsRes.code === 200 && violationsRes.data?.list) {
+      violationsRes.data.list.forEach((v: any) => {
+        alerts.push({
+          id: v.id,
+          type: v.type === 'overspeed' ? 'overspeed' : 'illegal',
+          message: v.description || `检测到违规车辆`,
+          plate: v.plateNumber || '未知',
+          time: v.detectTime ? new Date(v.detectTime).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '--:--',
+          speed: v.speed
+        })
+      })
+    }
+    
+    // 处理套牌信息
+    if (clonePlatesRes.code === 200 && clonePlatesRes.data?.list) {
+      clonePlatesRes.data.list.forEach((c: any) => {
+        alerts.push({
+          id: c.id,
+          type: 'duplicate',
+          message: '发现套牌嫌疑车辆',
+          plate: c.plateNumber || '未知',
+          time: c.detectTime ? new Date(c.detectTime).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '--:--'
+        })
+      })
+    }
+    
+    alertList.value = alerts.slice(0, 8)
+  } catch (e) {
+    console.error('加载告警失败:', e)
+  }
+}
 
 // 格式化数字
 const formatNumber = (num: number) => {
@@ -208,7 +303,6 @@ const getStatusLabel = (status: string) => {
 
 // 查看站点详情
 const viewStationDetail = () => {
-  // TODO: 跳转到详情页或打开弹窗
   console.log('查看站点详情:', selectedStation.value)
 }
 
@@ -220,16 +314,28 @@ const updateTime = () => {
 }
 
 let timeTimer: number | null = null
+let dataTimer: number | null = null
+
+// 加载所有数据
+const loadAllData = async () => {
+  await Promise.all([
+    loadDailyStats(),
+    loadRegionRank(),
+    loadAlerts()
+  ])
+}
 
 onMounted(() => {
   updateTime()
+  loadAllData()
   timeTimer = window.setInterval(updateTime, 1000)
+  // 每30秒刷新数据
+  dataTimer = window.setInterval(loadAllData, 30000)
 })
 
 onUnmounted(() => {
-  if (timeTimer) {
-    clearInterval(timeTimer)
-  }
+  if (timeTimer) clearInterval(timeTimer)
+  if (dataTimer) clearInterval(dataTimer)
 })
 </script>
 

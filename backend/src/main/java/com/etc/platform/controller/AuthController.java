@@ -1,52 +1,114 @@
 package com.etc.platform.controller;
 
 import com.etc.platform.dto.ApiResponse;
+import com.etc.platform.dto.LoginRequest;
+import com.etc.platform.dto.LoginResponse;
+import com.etc.platform.dto.UserInfo;
+import com.etc.platform.dto.PageResult;
+import com.etc.platform.entity.SysUser;
+import com.etc.platform.service.UserService;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * 简单认证接口（用于前后端联调，返回模拟数据）
- *
- * 前端对应：
- * - POST /api/auth/login
- * - GET  /api/user/info
+ * 用户认证接口
  */
 @RestController
 @RequestMapping("/api")
 public class AuthController {
 
-    /**
-     * 登录接口：目前直接返回固定 token，忽略用户名密码，用于联调。
-     */
-    @PostMapping("/auth/login")
-    public ApiResponse<Map<String, Object>> login(@RequestBody(required = false) Map<String, Object> params) {
-        Map<String, Object> data = new HashMap<>();
-        data.put("token", "mock-token-123456");
-        data.put("refreshToken", "mock-refresh-123456");
-        data.put("expires", Instant.now().plusSeconds(3600).toEpochMilli());
-        // 前端通常会在登录响应里取用户基础信息或在后续 /user/info 获取
-        return ApiResponse.ok(data);
+    private final UserService userService;
+
+    public AuthController(UserService userService) {
+        this.userService = userService;
     }
 
     /**
-     * 用户信息接口：提供角色等信息，供前端路由守卫和菜单权限使用。
+     * 登录接口
+     */
+    @PostMapping("/auth/login")
+    public ApiResponse<LoginResponse> login(@RequestBody LoginRequest request) {
+        LoginResponse response = userService.login(request.getUserName(), request.getPassword());
+        if (response == null) {
+            return ApiResponse.error("用户名或密码错误", 401);
+        }
+        return ApiResponse.ok(response);
+    }
+
+    /**
+     * 登出接口
+     */
+    @PostMapping("/auth/logout")
+    public ApiResponse<Void> logout(@RequestHeader(value = "Authorization", required = false) String token) {
+        if (token != null && token.startsWith("Bearer ")) {
+            userService.logout(token.substring(7));
+        }
+        return ApiResponse.ok(null);
+    }
+
+    /**
+     * 刷新Token
+     */
+    @PostMapping("/auth/refresh")
+    public ApiResponse<LoginResponse> refresh(@RequestBody Map<String, String> params) {
+        String refreshToken = params.get("refreshToken");
+        LoginResponse response = userService.refresh(refreshToken);
+        return ApiResponse.ok(response);
+    }
+
+    /**
+     * 用户信息接口
      */
     @GetMapping("/user/info")
-    public ApiResponse<Map<String, Object>> userInfo() {
-        Map<String, Object> data = new HashMap<>();
-        data.put("id", 1);
-        data.put("username", "admin");
-        data.put("nickname", "ETC 管理员");
-        data.put("avatar", "https://dummy.example.com/avatar.png");
-        // 角色与权限可以按前端期望调整，这里先给一个 admin 角色和全权限
-        data.put("roles", List.of("admin"));
-        data.put("permissions", List.of("*:*:*"));
-        return ApiResponse.ok(data);
+    public ApiResponse<UserInfo> userInfo(@RequestHeader(value = "Authorization", required = false) String token) {
+        String actualToken = token != null && token.startsWith("Bearer ") ? token.substring(7) : null;
+        UserInfo info = userService.getUserInfo(actualToken);
+        if (info == null) {
+            return ApiResponse.error("用户不存在", 404);
+        }
+        return ApiResponse.ok(info);
+    }
+
+    /**
+     * 用户列表
+     */
+    @GetMapping("/user/list")
+    public ApiResponse<PageResult<SysUser>> userList(
+            @RequestParam(defaultValue = "1") int current,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String userName,
+            @RequestParam(required = false) Integer status) {
+        List<SysUser> list = userService.listUsers(current, size, userName, status);
+        long total = userService.countUsers(userName, status);
+        return ApiResponse.ok(PageResult.of(list, total, current, size));
+    }
+
+    /**
+     * 角色列表（Mock）
+     */
+    @GetMapping("/role/list")
+    public ApiResponse<PageResult<Map<String, Object>>> roleList(
+            @RequestParam(defaultValue = "1") int current,
+            @RequestParam(defaultValue = "10") int size) {
+        List<Map<String, Object>> roles = List.of(
+                Map.of("id", 1, "roleCode", "admin", "roleName", "管理员", "status", 1),
+                Map.of("id", 2, "roleCode", "user", "roleName", "普通用户", "status", 1)
+        );
+        return ApiResponse.ok(PageResult.of(roles, 2L, current, size));
+    }
+
+    /**
+     * 系统菜单（Mock）
+     */
+    @GetMapping("/v3/system/menus")
+    public ApiResponse<List<Map<String, Object>>> menus() {
+        // 返回空列表，让前端使用本地路由
+        return ApiResponse.ok(List.of());
     }
 }
+
 
 

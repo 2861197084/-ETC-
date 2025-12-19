@@ -27,9 +27,9 @@
       </button>
       <button 
         class="tool-btn" 
-        :class="{ active: stationsVisible }"
-        @click="toggleStations" 
-        title="站点显示"
+        :class="{ active: checkpointsVisible }"
+        @click="toggleCheckpoints" 
+        title="卡口显示"
       >
         <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
@@ -56,24 +56,24 @@
     <!-- 站点信息窗体 -->
     <div ref="infoWindowRef" class="station-info-window" v-show="false">
       <div class="info-header">
-        <span class="station-name">{{ selectedStationInfo?.name }}</span>
-        <span class="station-type" :class="selectedStationInfo?.type">
-          {{ getStationTypeLabel(selectedStationInfo?.type) }}
+        <span class="station-name">{{ selectedCheckpointInfo?.name }}</span>
+        <span class="station-type" :class="selectedCheckpointInfo?.type">
+          {{ selectedCheckpointInfo?.type === 'provincial' ? '省际卡口' : '市际卡口' }}
         </span>
       </div>
       <div class="info-body">
         <div class="info-row">
           <span class="label">实时车流</span>
-          <span class="value">{{ selectedStationInfo?.flow || 0 }} 辆/小时</span>
+          <span class="value">{{ selectedCheckpointInfo?.flow || 0 }} 辆/小时</span>
         </div>
         <div class="info-row">
           <span class="label">今日通行</span>
-          <span class="value">{{ selectedStationInfo?.todayTotal || 0 }} 辆</span>
+          <span class="value">{{ selectedCheckpointInfo?.todayTotal || 0 }} 辆</span>
         </div>
         <div class="info-row">
           <span class="label">状态</span>
-          <span class="value status" :class="selectedStationInfo?.status">
-            {{ getStatusLabel(selectedStationInfo?.status) }}
+          <span class="value status" :class="selectedCheckpointInfo?.status">
+            {{ getStatusLabel(selectedCheckpointInfo?.status) }}
           </span>
         </div>
       </div>
@@ -90,11 +90,11 @@
       </div>
     </div>
 
-    <!-- 站点图例 -->
-    <div class="station-legend" v-if="stationsVisible">
-      <span class="title">站点状态</span>
+    <!-- 卡口图例 -->
+    <div class="station-legend" v-if="checkpointsVisible">
+      <span class="title">出市卡口 (19)</span>
       <div class="items">
-        <span><i class="normal"></i>正常</span>
+        <span><i class="checkpoint"></i>正常</span>
         <span><i class="busy"></i>繁忙</span>
         <span><i class="congested"></i>拥堵</span>
       </div>
@@ -108,15 +108,21 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import AMapLoader from '@amap/amap-jsapi-loader'
+import { checkpoints as staticCheckpoints, mapCenter, defaultZoom, type Checkpoint } from '@/config/checkpoints'
+import { getCheckpoints } from '@/api/admin/map'
 
 defineOptions({ name: 'XuzhouTrafficMap' })
 
-// 站点数据接口
-export interface StationData {
+// 地图显示用的卡口数据（扩展实时流量信息）
+export interface CheckpointDisplayData {
   id: string
   name: string
-  type: 'tollgate' | 'checkpoint' | 'service'
+  fullName: string
+  type: 'provincial' | 'municipal'
   position: [number, number]
+  region: string
+  road: string
+  boundary: string
   flow?: number
   todayTotal?: number
   status?: 'normal' | 'busy' | 'congested'
@@ -124,25 +130,25 @@ export interface StationData {
 
 // Props
 const props = withDefaults(defineProps<{
-  stations?: StationData[]
-  showStations?: boolean
+  checkpointFlows?: Record<string, { flow: number; todayTotal: number; status: 'normal' | 'busy' | 'congested' }>
+  showCheckpoints?: boolean
   enableRouting?: boolean
 }>(), {
-  stations: () => [],
-  showStations: true,
+  checkpointFlows: () => ({}),
+  showCheckpoints: true,
   enableRouting: false
 })
 
 // Emits
 const emit = defineEmits<{
-  (e: 'station-click', station: StationData): void
+  (e: 'checkpoint-click', checkpoint: CheckpointDisplayData): void
   (e: 'route-complete', result: any): void
   (e: 'map-ready', map: any): void
 }>()
 
-// 徐州市中心坐标
-const XUZHOU_CENTER = [117.284124, 34.205768]
-const XUZHOU_ZOOM = 12
+// 徐州市中心坐标（从配置获取）
+const XUZHOU_CENTER = [mapCenter.longitude, mapCenter.latitude]
+const XUZHOU_ZOOM = defaultZoom
 
 // 中国矿业大学南湖校区坐标
 const CUMT_NANHU_CENTER = [117.14509, 34.214571]
@@ -154,61 +160,117 @@ const searchText = ref('')
 const suggestions = ref<any[]>([])
 const showSuggestions = ref(false)
 const trafficOn = ref(true)
-const stationsVisible = ref(true)
-const selectedStationInfo = ref<StationData | null>(null)
+const checkpointsVisible = ref(true)
+const selectedCheckpointInfo = ref<CheckpointDisplayData | null>(null)
 
 let map: any = null
 let AMap: any = null
 let trafficLayer: any = null
 let autoComplete: any = null
 let searchMarker: any = null
-let stationMarkers: any[] = []
+let checkpointMarkers: any[] = []
 let infoWindow: any = null
 let driving: any = null
 let routePolyline: any = null
 
-// 徐州收费站/卡口模拟数据
-const defaultStations: StationData[] = [
-  { id: '1', name: '徐州东收费站', type: 'tollgate', position: [117.416589, 34.207845], flow: 856, todayTotal: 12350, status: 'normal' },
-  { id: '2', name: '徐州南收费站', type: 'tollgate', position: [117.285432, 34.128976], flow: 1230, todayTotal: 18420, status: 'busy' },
-  { id: '3', name: '徐州西收费站', type: 'tollgate', position: [117.098765, 34.198765], flow: 520, todayTotal: 8650, status: 'normal' },
-  { id: '4', name: '徐州北收费站', type: 'tollgate', position: [117.298432, 34.328976], flow: 680, todayTotal: 9870, status: 'normal' },
-  { id: '5', name: '铜山收费站', type: 'tollgate', position: [117.183265, 34.178654], flow: 1560, todayTotal: 21350, status: 'congested' },
-  { id: '6', name: '贾汪收费站', type: 'tollgate', position: [117.456321, 34.438765], flow: 320, todayTotal: 4560, status: 'normal' },
-  { id: '7', name: '新沂收费站', type: 'tollgate', position: [118.356789, 34.368765], flow: 450, todayTotal: 6780, status: 'normal' },
-  { id: '8', name: '邳州收费站', type: 'tollgate', position: [117.963254, 34.338765], flow: 380, todayTotal: 5430, status: 'normal' },
-  { id: '9', name: '北三环卡口', type: 'checkpoint', position: [117.312456, 34.285432], flow: 2350, todayTotal: 35680, status: 'busy' },
-  { id: '10', name: '南三环卡口', type: 'checkpoint', position: [117.278965, 34.165432], flow: 1890, todayTotal: 28950, status: 'normal' },
-  { id: '11', name: '东三环卡口', type: 'checkpoint', position: [117.398765, 34.218765], flow: 2150, todayTotal: 32450, status: 'busy' },
-  { id: '12', name: '西三环卡口', type: 'checkpoint', position: [117.156789, 34.205432], flow: 1650, todayTotal: 24680, status: 'normal' },
-  { id: '13', name: '徐州服务区', type: 'service', position: [117.356789, 34.256789], flow: 280, todayTotal: 3560, status: 'normal' },
-  { id: '14', name: '窑湾服务区', type: 'service', position: [117.856789, 34.398765], flow: 180, todayTotal: 2340, status: 'normal' },
-]
+// 动态加载的卡口数据
+const checkpoints = ref<Checkpoint[]>([...staticCheckpoints])
 
-// 站点图标配置
-const stationIcons: Record<string, { icon: string; color: string }> = {
-  tollgate: { 
-    icon: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z',
-    color: '#409EFF'
-  },
-  checkpoint: { 
-    icon: 'M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z',
-    color: '#E6A23C'
-  },
-  service: { 
-    icon: 'M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z',
-    color: '#67C23A'
-  }
+// 卡口名称映射（解决后端中文乱码问题）
+const CHECKPOINT_NAME_MAP: Record<number, string> = {
+  1: '苏皖界1(104省道)', 2: '苏皖界2(311国道)', 3: '苏皖界3(徐明高速)',
+  4: '苏皖界4(宿新高速)', 5: '苏皖界5(徐淮高速)', 6: '苏皖界6(新扬高速)',
+  7: '苏鲁界1(206国道)', 8: '苏鲁界2(104国道)', 9: '苏鲁界3(京台高速)',
+  10: '苏鲁界4(枣庄连接线)', 11: '苏鲁界5(京沪高速)', 12: '苏鲁界6(沂河路)',
+  13: '连云港界1(徐连高速)', 14: '连云港界2(310国道)', 15: '宿迁界1(徐宿高速)',
+  16: '宿迁界2(徐宿快速)', 17: '宿迁界3(104国道)', 18: '宿迁界4(新扬高速)',
+  19: '宿迁界5(徐盐高速)'
 }
 
-// 获取站点类型标签
-const getStationTypeLabel = (type?: string) => {
-  const labels: Record<string, string> = {
-    tollgate: '收费站',
-    checkpoint: '卡口',
-    service: '服务区'
+// 区域映射
+const REGION_MAP: Record<number, string> = {
+  1: '苏皖界', 2: '苏皖界', 3: '苏皖界', 4: '苏皖界', 5: '苏皖界', 6: '苏皖界',
+  7: '苏鲁界', 8: '苏鲁界', 9: '苏鲁界', 10: '苏鲁界', 11: '苏鲁界', 12: '苏鲁界',
+  13: '连云港界', 14: '连云港界',
+  15: '宿迁界', 16: '宿迁界', 17: '宿迁界', 18: '宿迁界', 19: '宿迁界'
+}
+
+// 从后端加载卡口数据
+const loadCheckpointsFromApi = async () => {
+  try {
+    const res = await getCheckpoints()
+    if (res.code === 200 && res.data && res.data.length > 0) {
+      // 将后端数据转换为 Checkpoint 格式，使用本地名称映射解决乱码
+      checkpoints.value = res.data.map((cp: any) => {
+        const cpId = parseInt(cp.id || cp.code)
+        return {
+          id: cp.id || cp.code,
+          code: cp.code || cp.id,
+          name: CHECKPOINT_NAME_MAP[cpId] || cp.name || `卡口${cpId}`,
+          fullName: CHECKPOINT_NAME_MAP[cpId] || cp.fullName || cp.name || `卡口${cpId}`,
+          longitude: cp.longitude,
+          latitude: cp.latitude,
+          region: REGION_MAP[cpId] || cp.region || '未知',
+          type: cp.type === 'provincial' ? 'provincial' : 'municipal',
+          road: cp.road || '',
+          boundary: cp.boundary || 'unknown',
+          status: cp.status || 'online',
+          // 额外的实时数据
+          currentFlow: cp.currentFlow || 0,
+          maxCapacity: cp.maxCapacity || 3200
+        }
+      })
+      console.log('✅ 从后端加载卡口数据:', checkpoints.value.length, '个')
+      return true
+    }
+  } catch (e) {
+    console.warn('⚠️ 后端卡口数据加载失败，使用静态配置:', e)
   }
-  return labels[type || ''] || '未知'
+  return false
+}
+
+// 将配置数据转换为地图显示数据
+const getCheckpointDisplayData = (): CheckpointDisplayData[] => {
+  return checkpoints.value.map(cp => {
+    // 从后端数据获取实时流量
+    const apiFlow = (cp as any).currentFlow
+    const apiCapacity = (cp as any).maxCapacity || 3200
+    
+    // 计算状态
+    let status: 'normal' | 'busy' | 'congested' = 'normal'
+    if (apiFlow) {
+      const ratio = apiFlow / apiCapacity
+      if (ratio > 0.8) status = 'congested'
+      else if (ratio > 0.5) status = 'busy'
+    }
+    
+    return {
+      id: cp.id,
+      name: cp.name,
+      fullName: cp.fullName,
+      type: cp.type,
+      position: [cp.longitude, cp.latitude] as [number, number],
+      region: cp.region,
+      road: cp.road,
+      boundary: cp.boundary,
+      // 优先使用后端数据，其次使用 props 传入的数据
+      flow: apiFlow || props.checkpointFlows[cp.id]?.flow || 0,
+      todayTotal: props.checkpointFlows[cp.id]?.todayTotal || (apiFlow ? apiFlow * 24 : 0),
+      status: props.checkpointFlows[cp.id]?.status || status
+    }
+  })
+}
+
+// 卡口统一配置
+const checkpointConfig = {
+  label: '出市卡口',
+  color: '#409EFF',  // 统一蓝色
+  icon: '📍'
+}
+
+// 获取卡口类型标签
+const getCheckpointTypeLabel = (type?: string) => {
+  return checkpointTypeConfig[type as keyof typeof checkpointTypeConfig]?.label || '未知'
 }
 
 // 获取状态标签
@@ -221,14 +283,15 @@ const getStatusLabel = (status?: string) => {
   return labels[status || ''] || '未知'
 }
 
-// 创建统一的标记图标（简单圆点样式）
-const createMarkerContent = (station: StationData) => {
+// 创建卡口标记图标（统一样式）
+const createCheckpointMarkerContent = (checkpoint: CheckpointDisplayData) => {
   // 根据状态设置颜色
-  const statusColor = station.status === 'congested' ? '#F56C6C' : 
-                     station.status === 'busy' ? '#E6A23C' : '#409EFF'
+  const statusColor = checkpoint.status === 'congested' ? '#F56C6C' : 
+                     checkpoint.status === 'busy' ? '#E6A23C' : 
+                     checkpointConfig.color
   
   return `
-    <div class="station-marker" style="
+    <div class="checkpoint-marker" style="
       width: 14px;
       height: 14px;
       background: ${statusColor};
@@ -323,37 +386,32 @@ const initMap = async () => {
       policy: AMap.DrivingPolicy.LEAST_TIME // 最快路线
     })
 
-    // 添加站点标记
-    if (props.showStations) {
-      addStationMarkers()
+    // 添加卡口标记
+    if (props.showCheckpoints) {
+      addCheckpointMarkers()
     }
 
-    console.log('徐州地图加载成功')
+    console.log('徐州地图加载成功，已加载19个出市卡口')
   } catch (e) {
     console.error('地图加载失败:', e)
   }
 }
 
 // 生成信息窗体HTML内容
-const generateInfoWindowContent = (station: StationData) => {
-  const typeLabels: Record<string, string> = {
-    tollgate: '收费站',
-    checkpoint: '卡口',
-    service: '服务区'
-  }
+const generateInfoWindowContent = (checkpoint: CheckpointDisplayData) => {
   const statusLabels: Record<string, string> = {
     normal: '正常',
     busy: '繁忙',
     congested: '拥堵'
   }
-  const statusClass = station.status || 'normal'
+  const statusClass = checkpoint.status || 'normal'
   
   return `
-    <div class="station-info-window" style="
+    <div class="checkpoint-info-window" style="
       background: #fff;
-      border-radius: 6px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.12);
-      min-width: 180px;
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+      min-width: 220px;
       overflow: hidden;
       border: 1px solid #e4e7ed;
     ">
@@ -361,67 +419,71 @@ const generateInfoWindowContent = (station: StationData) => {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 10px 12px;
-        background: #f5f7fa;
+        padding: 12px 14px;
+        background: linear-gradient(135deg, ${checkpointConfig.color}22, ${checkpointConfig.color}11);
         border-bottom: 1px solid #e4e7ed;
       ">
-        <span style="font-size: 13px; font-weight: 600; color: #303133;">${station.name}</span>
+        <span style="font-size: 14px; font-weight: 600; color: #303133;">${checkpoint.name}</span>
         <span style="
           font-size: 10px;
-          padding: 2px 6px;
-          border-radius: 3px;
-          background: #ecf5ff;
-          color: #409EFF;
-        ">${typeLabels[station.type] || '未知'}</span>
+          padding: 2px 8px;
+          border-radius: 10px;
+          background: ${checkpointConfig.color}22;
+          color: ${checkpointConfig.color};
+          font-weight: 500;
+        ">出市卡口</span>
       </div>
-      <div style="padding: 10px 12px;">
-        <div style="display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #f0f0f0;">
+      <div style="padding: 12px 14px;">
+        <div style="font-size: 11px; color: #909399; margin-bottom: 8px; line-height: 1.4;">
+          📍 ${checkpoint.region} · ${checkpoint.road} · ${checkpoint.boundary}
+        </div>
+        <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f0f0f0;">
           <span style="font-size: 12px; color: #909399;">实时车流</span>
-          <span style="font-size: 12px; color: #303133; font-weight: 500;">${station.flow || 0} 辆/小时</span>
+          <span style="font-size: 13px; color: #303133; font-weight: 600;">${checkpoint.flow || 0} <small style="font-weight:normal;color:#909399">辆/时</small></span>
         </div>
-        <div style="display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #f0f0f0;">
+        <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f0f0f0;">
           <span style="font-size: 12px; color: #909399;">今日通行</span>
-          <span style="font-size: 12px; color: #303133; font-weight: 500;">${station.todayTotal || 0} 辆</span>
+          <span style="font-size: 13px; color: #303133; font-weight: 600;">${(checkpoint.todayTotal || 0).toLocaleString()} <small style="font-weight:normal;color:#909399">辆</small></span>
         </div>
-        <div style="display: flex; justify-content: space-between; padding: 5px 0;">
-          <span style="font-size: 12px; color: #909399;">状态</span>
+        <div style="display: flex; justify-content: space-between; padding: 6px 0;">
+          <span style="font-size: 12px; color: #909399;">通行状态</span>
           <span style="
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 500;
             background: ${statusClass === 'congested' ? '#fef0f0' : statusClass === 'busy' ? '#fdf6ec' : '#f0f9eb'};
             color: ${statusClass === 'congested' ? '#F56C6C' : statusClass === 'busy' ? '#E6A23C' : '#67C23A'};
-          ">${statusLabels[station.status || ''] || '正常'}</span>
+          ">${statusLabels[checkpoint.status || ''] || '正常'}</span>
         </div>
       </div>
     </div>
   `
 }
 
-// 添加站点标记
-const addStationMarkers = () => {
-  const stationsData = props.stations.length > 0 ? props.stations : defaultStations
+// 添加19个出市卡口标记
+const addCheckpointMarkers = () => {
+  const checkpointData = getCheckpointDisplayData()
   
-  stationsData.forEach(station => {
+  checkpointData.forEach(checkpoint => {
     const marker = new AMap.Marker({
-      position: station.position,
-      content: createMarkerContent(station),
+      position: checkpoint.position,
+      content: createCheckpointMarkerContent(checkpoint),
       offset: new AMap.Pixel(-7, -7),
-      extData: station
+      extData: checkpoint,
+      title: checkpoint.name
     })
 
-    // 点击事件 - 使用闭包确保station数据正确
+    // 点击事件
     marker.on('click', (e: any) => {
       e.stopPropagation && e.stopPropagation()
       
-      // 从 marker 的 extData 获取站点数据，确保数据准确
-      const stationData = marker.getExtData() as StationData
-      selectedStationInfo.value = stationData
-      emit('station-click', stationData)
+      const cpData = marker.getExtData() as CheckpointDisplayData
+      selectedCheckpointInfo.value = cpData
+      emit('checkpoint-click', cpData)
       
-      // 直接生成HTML内容显示信息窗体，避免Vue响应式延迟
       if (infoWindow) {
-        const content = generateInfoWindowContent(stationData)
+        const content = generateInfoWindowContent(cpData)
         infoWindow.setContent(content)
         infoWindow.open(map, marker.getPosition())
       }
@@ -435,27 +497,26 @@ const addStationMarkers = () => {
       marker.setOffset(new AMap.Pixel(-7, -7))
     })
 
-    stationMarkers.push(marker)
+    checkpointMarkers.push(marker)
+    map.add(marker)
   })
-
-  map.add(stationMarkers)
 }
 
-// 移除站点标记
-const removeStationMarkers = () => {
-  if (stationMarkers.length > 0) {
-    map.remove(stationMarkers)
-    stationMarkers = []
-  }
+// 移除卡口标记
+const removeCheckpointMarkers = () => {
+  checkpointMarkers.forEach(marker => {
+    map.remove(marker)
+  })
+  checkpointMarkers = []
 }
 
-// 切换站点显示
-const toggleStations = () => {
-  stationsVisible.value = !stationsVisible.value
-  if (stationsVisible.value) {
-    addStationMarkers()
+// 切换卡口显示
+const toggleCheckpoints = () => {
+  checkpointsVisible.value = !checkpointsVisible.value
+  if (checkpointsVisible.value) {
+    addCheckpointMarkers()
   } else {
-    removeStationMarkers()
+    removeCheckpointMarkers()
     if (infoWindow) {
       infoWindow.close()
     }
@@ -589,11 +650,14 @@ defineExpose({
   planRoute,
   clearRoute,
   setCenter,
-  addStationMarkers,
-  removeStationMarkers
+  addCheckpointMarkers,
+  removeCheckpointMarkers
 })
 
-onMounted(() => {
+onMounted(async () => {
+  // 先从后端加载卡口数据
+  await loadCheckpointsFromApi()
+  // 然后初始化地图
   initMap()
   document.addEventListener('click', handleClickOutside)
 })
@@ -808,7 +872,7 @@ onUnmounted(() => {
   border-radius: 50%;
 }
 
-.station-legend .items i.normal {
+.station-legend .items i.checkpoint {
   background: #409EFF;
 }
 

@@ -1,0 +1,22 @@
+# HBase 表初始化脚本
+# 创建 ETC 系统所需的 HBase 表
+
+# 通行记录表 - 存储海量车辆通行记录
+# RowKey: checkpoint_id(补零8位) + reverse_timestamp(Long.MAX - timestamp)
+# 这样可以按卡口分区，且最新记录在前
+create 'pass_record', {NAME => 'cf', VERSIONS => 1, COMPRESSION => 'SNAPPY', TTL => 31536000}
+
+# 实时流量表 - 存储每分钟的实时流量统计
+# RowKey: checkpoint_id(补零8位) + timestamp(yyyyMMddHHmm)
+create 'realtime_flow', {NAME => 'cf', VERSIONS => 1, TTL => 604800}
+
+# 车辆轨迹表 - 存储车辆的通行轨迹
+# RowKey: plate_number + reverse_timestamp
+create 'vehicle_trace', {NAME => 'cf', VERSIONS => 1, TTL => 2592000}
+
+# 告警记录表 - 存储系统告警
+# RowKey: alert_type + reverse_timestamp
+create 'alert_record', {NAME => 'cf', VERSIONS => 1, TTL => 7776000}
+
+# 列出所有表
+list
