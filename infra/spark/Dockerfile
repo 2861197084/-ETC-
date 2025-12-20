@@ -1,10 +1,12 @@
 ARG SPARK_VERSION=3.5.4
 
-FROM public.ecr.aws/docker/library/python:3.12-slim-bookworm
+FROM docker.io/library/python:3.12-slim-bookworm
 
 ARG SPARK_VERSION
 
-RUN apt-get update \
+# 使用阿里云镜像源
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources \
+  && apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl bash openjdk-17-jre-headless procps \
   && rm -rf /var/lib/apt/lists/*
 

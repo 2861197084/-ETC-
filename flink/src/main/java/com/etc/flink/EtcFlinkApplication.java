@@ -26,33 +26,26 @@ public class EtcFlinkApplication {
         // 创建执行环境
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment(config);
         
-        // 设置检查点（容错）
-        env.enableCheckpointing(60000); // 每60秒检查点
-        env.setParallelism(2); // 并行度
+        // 设置检查点（容错）- 间隔拉长减少开销
+        env.enableCheckpointing(120000); // 每120秒检查点
+        env.setParallelism(1); // 并行度降为1，减少CPU占用
 
         // 注册并启动所有作业
         LOG.info("注册实时计算作业...");
         
-        // 1. 车流量统计作业
-        TrafficFlowJob.register(env);
-        
-        // 2. 营收统计作业
-        RevenueJob.register(env);
-        
-        // 3. 车辆来源统计作业(本地/外地)
-        VehicleSourceJob.register(env);
-        
-        // 4. 站口压力计算作业
-        CheckpointPressureJob.register(env);
-        
-        // 5. 区域热度排名作业
-        RegionHeatJob.register(env);
-        
-        // 6. 违章实时检测作业
-        ViolationDetectJob.register(env);
-        
-        // 7. 套牌车实时检测作业
+        // ==================== 当前只启用套牌检测（测试） ====================
+        // 套牌车实时检测作业 - 唯一需要Flink实时处理的功能
         ClonePlateDetectJob.register(env);
+        
+        // ==================== 以下作业暂时禁用（改用Spring Boot定时任务实现） ====================
+        // DataSyncJob.register(env);           // 数据同步 → 定时批量消费Kafka
+        // CounterJob.register(env);            // 计数器 → SQL COUNT
+        // TrafficFlowJob.register(env);        // 流量统计 → SQL聚合
+        // CheckpointPressureJob.register(env); // 站点压力 → SQL统计
+        // RevenueJob.register(env);            // 收入统计 → SQL SUM
+        // VehicleSourceJob.register(env);
+        // RegionHeatJob.register(env);
+        // ViolationDetectJob.register(env);
 
         LOG.info("所有作业注册完成，开始执行...");
         LOG.info("Flink Web UI: http://localhost:8083");

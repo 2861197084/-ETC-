@@ -30,10 +30,11 @@ public class TrafficFlowJob {
         
         // 1. 按卡口ID分组，5分钟窗口统计
         DataStream<Tuple3<Long, String, Long>> checkpointFlow = source
+                .filter(event -> event.getCheckpointIdNum() != null)
                 .map(new MapFunction<PassRecordEvent, Tuple2<Long, Long>>() {
                     @Override
                     public Tuple2<Long, Long> map(PassRecordEvent event) {
-                        return Tuple2.of(event.getCheckpointId(), 1L);
+                        return Tuple2.of(event.getCheckpointIdNum(), 1L);
                     }
                 })
                 .keyBy(t -> t.f0)
@@ -84,6 +85,9 @@ public class TrafficFlowJob {
         DataStream<Tuple2<Long, Long>> speedStats = source
                 .filter(e -> e.getSpeed() != null && e.getSpeed() > 0)
                 .map(e -> Tuple2.of((long) e.getSpeed(), 1L))
+                .returns(org.apache.flink.api.common.typeinfo.Types.TUPLE(
+                    org.apache.flink.api.common.typeinfo.Types.LONG, 
+                    org.apache.flink.api.common.typeinfo.Types.LONG))
                 .keyBy(v -> "speed")
                 .window(TumblingProcessingTimeWindows.of(Time.minutes(5)))
                 .reduce((a, b) -> Tuple2.of(a.f0 + b.f0, a.f1 + b.f1))

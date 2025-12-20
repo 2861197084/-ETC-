@@ -28,23 +28,23 @@ export default ({ mode }: { mode: string }) => {
       port: Number(VITE_PORT),
       proxy: {
         '/api': {
-          // 前端所有 /api 开头的请求，转发到本机后端 8081
-          target: 'http://localhost:8081',
+          // 前端所有 /api 开头的请求，转发到本机后端 8080
+          target: 'http://localhost:8080',
           changeOrigin: true
         },
         '/admin': {
           // 管理员接口转发到后端
-          target: 'http://localhost:8081',
+          target: 'http://localhost:8080',
           changeOrigin: true
         },
         '/owner': {
           // 车主接口转发到后端
-          target: 'http://localhost:8081',
+          target: 'http://localhost:8080',
           changeOrigin: true
         },
         '/ws': {
           // WebSocket 告警转发到后端
-          target: 'http://localhost:8081',
+          target: 'http://localhost:8080',
           ws: true,
           changeOrigin: true
         }

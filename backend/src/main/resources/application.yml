@@ -1,5 +1,5 @@
 server:
-  port: 8081
+  port: 8080
   address: 0.0.0.0
   servlet:
     encoding:
@@ -11,11 +11,11 @@ spring:
   application:
     name: etc-backend
   
-  # MySQL 数据源配置 (连接 Docker 集群)
+  # MySQL 数据源配置 (通过 ShardingSphere 代理连接分片表)
   datasource:
-    url: jdbc:mysql://localhost:13306/etc_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=utf8&useUnicode=true
+    url: jdbc:mysql://localhost:3307/etc?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=utf8&useUnicode=true
     username: root
-    password: etc123456
+    password: root
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       minimum-idle: 5
@@ -30,7 +30,7 @@ spring:
     redis:
       host: localhost
       port: 6379
-      password: etc123456
+      password:
       database: 0
       timeout: 5000ms
       lettuce:
@@ -43,7 +43,7 @@ spring:
   # JPA 配置
   jpa:
     hibernate:
-      ddl-auto: none
+      ddl-auto: update
     show-sql: true
     properties:
       hibernate:

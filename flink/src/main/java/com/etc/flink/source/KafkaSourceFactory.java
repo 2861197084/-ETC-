@@ -36,7 +36,8 @@ public class KafkaSourceFactory {
                 .setBootstrapServers(FlinkConfig.KAFKA_BOOTSTRAP_SERVERS)
                 .setTopics(FlinkConfig.KAFKA_TOPIC_PASS_RECORDS)
                 .setGroupId(FlinkConfig.KAFKA_CONSUMER_GROUP)
-                .setStartingOffsets(OffsetsInitializer.latest())
+                // 从 earliest 开始消费所有数据
+                .setStartingOffsets(OffsetsInitializer.earliest())
                 .setValueOnlyDeserializer(new PassRecordDeserializer())
                 .build();
 

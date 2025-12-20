@@ -15,7 +15,9 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 public class DailyStats {
     private Integer totalFlow;        // 今日总流量
+    private Integer hourlyFlow;       // 最近一小时流量
     private Integer totalRevenue;     // 今日总收入（整数，元）
+    private Integer hourlyRevenue;    // 最近一小时收入
     private BigDecimal avgSpeed;      // 平均速度
     private Integer onlineDevices;    // 在线设备数
     private Integer abnormalEvents;   // 异常事件数

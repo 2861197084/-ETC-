@@ -12,6 +12,15 @@ import java.time.LocalDateTime;
 
 /**
  * 通行记录事件 - 从Kafka接收的数据
+ * 字段映射：
+ * - hp -> plateNumber (车牌号)
+ * - gcsj -> passTime (过车时间)
+ * - checkpointId -> checkpointIdStr (卡口编号，如 CP001)
+ * - kkmc -> checkpointName (卡口名称)
+ * - fxlx -> direction (方向类型：进城/出城)
+ * - hpzl -> vehicleType (号牌种类)
+ * - clppxh -> vehicleModel (车辆品牌型号)
+ * - xzqhmc -> regionName (行政区划名称)
  */
 @Data
 @NoArgsConstructor
@@ -22,37 +31,49 @@ public class PassRecordEvent implements Serializable {
 
     private Long id;
     
-    @JsonProperty("plate_number")
+    // 过车序号
+    private String gcxh;
+    
+    // 车牌号 (hp = 号牌)
+    @JsonProperty("hp")
     private String plateNumber;
     
-    @JsonProperty("checkpoint_id")
-    private Long checkpointId;
+    // 卡口编号 (如 CP001)
+    private String checkpointId;
     
-    @JsonProperty("checkpoint_name")
+    // 卡口名称
+    @JsonProperty("kkmc")
     private String checkpointName;
     
-    @JsonProperty("pass_time")
+    // 过车时间
+    @JsonProperty("gcsj")
     private String passTime;
     
-    @JsonProperty("vehicle_type")
+    // 号牌种类
+    @JsonProperty("hpzl")
     private String vehicleType;
     
-    @JsonProperty("vehicle_color")
-    private String vehicleColor;
+    // 车辆品牌型号
+    @JsonProperty("clppxh")
+    private String vehicleModel;
     
-    private Integer speed;
-    
-    @JsonProperty("etc_card_id")
-    private String etcCardId;
-    
-    @JsonProperty("etc_deduction")
-    private BigDecimal etcDeduction;
-    
+    // 方向类型
+    @JsonProperty("fxlx")
     private String direction;
     
-    @JsonProperty("image_url")
-    private String imageUrl;
+    // 行政区划名称
+    @JsonProperty("xzqhmc")
+    private String regionName;
     
+    // 事件时间戳（毫秒）
+    private Long eventTime;
+    
+    // 以下字段保留兼容性，可能不存在于Kafka消息中
+    private String vehicleColor;
+    private Integer speed;
+    private String etcCardId;
+    private BigDecimal etcDeduction;
+    private String imageUrl;
     private String timestamp;
     
     /**
@@ -67,11 +88,30 @@ public class PassRecordEvent implements Serializable {
      */
     public String getRegion() {
         if (checkpointId == null) return "未知";
-        if (checkpointId >= 1 && checkpointId <= 6) return "苏皖界";
-        if (checkpointId >= 7 && checkpointId <= 12) return "苏鲁界";
-        if (checkpointId >= 13 && checkpointId <= 14) return "连云港界";
-        if (checkpointId >= 15 && checkpointId <= 19) return "宿迁界";
+        // checkpointId 格式如 "CP001", 提取数字部分
+        try {
+            int cpNum = Integer.parseInt(checkpointId.replaceAll("[^0-9]", ""));
+            if (cpNum >= 1 && cpNum <= 6) return "苏皖界";
+            if (cpNum >= 7 && cpNum <= 12) return "苏鲁界";
+            if (cpNum >= 13 && cpNum <= 14) return "连云港界";
+            if (cpNum >= 15 && cpNum <= 19) return "宿迁界";
+        } catch (NumberFormatException e) {
+            return "未知";
+        }
         return "未知";
+    }
+    
+    /**
+     * 获取卡口ID的数字部分（用于兼容原有Long类型逻辑）
+     * 如 "CP001" -> 1, "CP015" -> 15
+     */
+    public Long getCheckpointIdNum() {
+        if (checkpointId == null) return null;
+        try {
+            return Long.parseLong(checkpointId.replaceAll("[^0-9]", ""));
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
     
     /**

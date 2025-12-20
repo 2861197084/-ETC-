@@ -38,7 +38,7 @@ public class ViolationDetectJob {
                     public ViolationRecord map(PassRecordEvent e) {
                         ViolationRecord v = new ViolationRecord();
                         v.plateNumber = e.getPlateNumber();
-                        v.checkpointId = e.getCheckpointId();
+                        v.checkpointId = e.getCheckpointIdNum();
                         v.violationType = "overspeed";
                         v.description = "超速行驶，检测速度: " + e.getSpeed() + " km/h，限速: 120 km/h";
                         v.fineAmount = 200;

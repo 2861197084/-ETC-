@@ -4,24 +4,32 @@ import java.util.Map;
 
 /**
  * Flink配置常量
+ * 注意：这些配置是在 Docker 容器内运行，使用 Docker 服务名
  */
 public class FlinkConfig {
     
-    // Kafka配置
-    public static final String KAFKA_BOOTSTRAP_SERVERS = "localhost:9092";
+    // Kafka配置（Docker 内部网络使用服务名:内部端口）
+    public static final String KAFKA_BOOTSTRAP_SERVERS = "kafka:9092";
     public static final String KAFKA_TOPIC_PASS_RECORDS = "etc-pass-records";
     public static final String KAFKA_CONSUMER_GROUP = "etc-flink-consumer";
     
-    // MySQL配置
-    public static final String MYSQL_URL = "jdbc:mysql://localhost:13306/etc_system?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8";
+    // MySQL配置（通过 ShardingSphere 代理访问）
+    public static final String MYSQL_URL = "jdbc:mysql://shardingsphere:3307/etc?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8";
     public static final String MYSQL_USER = "root";
-    public static final String MYSQL_PASSWORD = "root123";
+    public static final String MYSQL_PASSWORD = "root";
+    
+    // HBase配置
+    public static final String HBASE_ZOOKEEPER_QUORUM = "zookeeper";
+    public static final String HBASE_ZOOKEEPER_PORT = "2181";
+    public static final String HBASE_TABLE_PASS_RECORD = "etc:pass_record";
+    public static final String HBASE_TABLE_TRAJECTORY = "etc:vehicle_trajectory";
+    public static final String HBASE_COLUMN_FAMILY = "d";
     
     // Redis配置
-    public static final String REDIS_HOST = "localhost";
+    public static final String REDIS_HOST = "redis";
     public static final int REDIS_PORT = 6379;
     
-    // Redis Key前缀
+    // Redis Key前缀 - 实时统计
     public static final String REDIS_KEY_FLOW_TOTAL = "realtime:flow:total";
     public static final String REDIS_KEY_FLOW_CHECKPOINT = "realtime:flow:checkpoint:";
     public static final String REDIS_KEY_REVENUE_TODAY = "realtime:revenue:today";
@@ -33,6 +41,12 @@ public class FlinkConfig {
     public static final String REDIS_KEY_AVG_SPEED = "realtime:avgspeed";
     public static final String REDIS_KEY_SPEED_SUM = "realtime:speed:sum";
     public static final String REDIS_KEY_SPEED_COUNT = "realtime:speed:count";
+    
+    // Redis Key前缀 - 计数器（新增）
+    public static final String REDIS_KEY_PLATE_COUNT = "plate:count:";           // 车牌通行总数
+    public static final String REDIS_KEY_PLATE_COUNT_TODAY = "plate:count:today:"; // 车牌今日通行数
+    public static final String REDIS_KEY_CP_COUNT = "cp:count:";                  // 卡口通行总数
+    public static final String REDIS_KEY_CP_COUNT_TODAY = "cp:count:today:";       // 卡口今日通行数
     
     // 卡口名称映射
     public static final Map<Long, String> CHECKPOINT_NAME_MAP = Map.ofEntries(

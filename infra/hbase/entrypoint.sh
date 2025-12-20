@@ -14,5 +14,6 @@ fi
 
 "${HBASE_HOME}/bin/hbase-daemon.sh" start master
 "${HBASE_HOME}/bin/hbase-daemon.sh" start regionserver
+"${HBASE_HOME}/bin/hbase-daemon.sh" start thrift
 
 tail -F "${HBASE_LOG_DIR}"/*.log

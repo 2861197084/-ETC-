@@ -1,5 +1,8 @@
 <template>
   <div class="monitor-dashboard">
+    <!-- 套牌车检测弹窗 -->
+    <ClonePlateAlert />
+    
     <!-- 顶部标题栏 -->
     <div class="top-header">
       <div class="header-left">
@@ -127,7 +130,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { Sunny, Van, Money, Odometer, Connection, Warning } from '@element-plus/icons-vue'
-import { XuzhouTrafficMap, BloomStats, RegionRank, AlertTicker } from '@/components/business/etc'
+import { XuzhouTrafficMap, BloomStats, RegionRank, AlertTicker, ClonePlateAlert } from '@/components/business/etc'
 import { getDailyStats, getViolations, getClonePlates } from '@/api/admin/realtime'
 import { getCheckpoints } from '@/api/admin/map'
 import { checkpoints as localCheckpoints } from '@/config/checkpoints'

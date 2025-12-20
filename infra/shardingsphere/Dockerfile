@@ -1,4 +1,4 @@
-ARG SHARDINGSPHERE_VERSION=5.5.0
+ARG SHARDINGSPHERE_VERSION=5.4.1
 ARG MYSQL_CONNECTOR_VERSION=8.4.0
 
 FROM eclipse-temurin:21-jre-jammy
@@ -36,4 +36,4 @@ COPY conf/ /opt/shardingsphere-proxy/conf/
 EXPOSE 3307
 
 ENTRYPOINT ["/usr/bin/tini","--"]
-CMD ["/opt/shardingsphere-proxy/bin/start.sh"]
+CMD ["java", "-classpath", "/opt/shardingsphere-proxy/conf:/opt/shardingsphere-proxy/lib/*:/opt/shardingsphere-proxy/ext-lib/*", "-Xms512m", "-Xmx1024m", "org.apache.shardingsphere.proxy.Bootstrap", "3307", "/opt/shardingsphere-proxy/conf"]

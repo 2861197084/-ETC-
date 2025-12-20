@@ -49,12 +49,12 @@ public class RevenueJob {
         
         // 2. 按卡口统计营收
         DataStream<Tuple2<Long, Long>> checkpointRevenue = source
-                .filter(e -> e.getEtcDeduction() != null && e.getCheckpointId() != null)
+                .filter(e -> e.getEtcDeduction() != null && e.getCheckpointIdNum() != null)
                 .map(new MapFunction<PassRecordEvent, Tuple2<Long, Long>>() {
                     @Override
                     public Tuple2<Long, Long> map(PassRecordEvent e) {
                         long revenue = e.getEtcDeduction().multiply(BigDecimal.valueOf(100)).longValue();
-                        return Tuple2.of(e.getCheckpointId(), revenue);
+                        return Tuple2.of(e.getCheckpointIdNum(), revenue);
                     }
                 })
                 .keyBy(t -> t.f0)

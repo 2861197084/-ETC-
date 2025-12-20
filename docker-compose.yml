@@ -59,7 +59,7 @@ services:
       [
         "bash",
         "-lc",
-        "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic etc.pass.raw --partitions 6 --replication-factor 1 && \
+        "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic etc-pass-records --partitions 6 --replication-factor 1 && \
          /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic etc.pass.clean --partitions 6 --replication-factor 1 && \
          /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic etc.alerts.clone_plate --partitions 3 --replication-factor 1 && \
          /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic etc.alerts.pressure --partitions 3 --replication-factor 1 && \
@@ -86,7 +86,7 @@ services:
       MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-root}"
       TZ: Asia/Shanghai
     ports:
-      - "33060:3306"
+      - "33070:3306"
     volumes:
       - mysql0-data:/var/lib/mysql
       - ./infra/mysql/init:/docker-entrypoint-initdb.d:ro
@@ -113,10 +113,7 @@ services:
       retries: 18
 
   shardingsphere:
-    build:
-      context: ./infra/shardingsphere
-      args:
-        SHARDINGSPHERE_VERSION: "5.5.0"
+    image: apache/shardingsphere-proxy:5.4.1
     depends_on:
       mysql0:
         condition: service_healthy
@@ -124,6 +121,9 @@ services:
         condition: service_healthy
     ports:
       - "3307:3307"
+    volumes:
+      - ./infra/shardingsphere/conf:/opt/shardingsphere-proxy/conf
+      - ./infra/shardingsphere/ext-lib:/opt/shardingsphere-proxy/ext-lib
     environment:
       JAVA_OPTS: "-Xms512m -Xmx1024m"
     healthcheck:
@@ -144,10 +144,13 @@ services:
     environment:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: flink-jobmanager
+        jobmanager.rpc.port: 6123
         rest.address: flink-jobmanager
         rest.port: 8081
-        taskmanager.numberOfTaskSlots: 4
-        parallelism.default: 2
+        blob.server.port: 6124
+        taskmanager.numberOfTaskSlots: 2
+        parallelism.default: 1
+        jobmanager.memory.process.size: 768m
     depends_on:
       kafka:
         condition: service_healthy
@@ -162,8 +165,11 @@ services:
     environment:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: flink-jobmanager
-        taskmanager.numberOfTaskSlots: 4
-        parallelism.default: 2
+        jobmanager.rpc.port: 6123
+        blob.server.port: 6124
+        taskmanager.numberOfTaskSlots: 2
+        parallelism.default: 1
+        taskmanager.memory.process.size: 1024m
     depends_on:
       - flink-jobmanager
 
@@ -179,6 +185,7 @@ services:
     ports:
       - "16010:16010" # HBase Master UI
       - "16030:16030" # RegionServer UI
+      - "9090:9090"   # Thrift Server
     volumes:
       - hbase-data:/data
     healthcheck:
@@ -198,6 +205,28 @@ services:
         condition: service_healthy
     command: ["bash", "-lc", "/opt/hbase/bin/hbase shell /init/create-tables.hbase"]
     restart: "no"
+
+  # ==================== Presto/Trino - SQL 查询引擎 ====================
+  trino:
+    image: trinodb/trino:439
+    container_name: trino
+    hostname: trino
+    ports:
+      - "8090:8080"  # Trino Web UI & Query Endpoint
+    volumes:
+      - ./infra/trino/etc/config.properties:/etc/trino/config.properties:ro
+      - ./infra/trino/etc/node.properties:/etc/trino/node.properties:ro
+      - ./infra/trino/etc/jvm.config:/etc/trino/jvm.config:ro
+      - ./infra/trino/etc/log.properties:/etc/trino/log.properties:ro
+      - ./infra/trino/catalog:/etc/trino/catalog:ro
+    depends_on:
+      mysql0:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/v1/status | grep -q ACTIVE"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
 
   spark-master:
     build:
@@ -238,3 +267,4 @@ volumes:
   mysql1-data:
   hbase-data:
   spark-data:
+  trino-data:

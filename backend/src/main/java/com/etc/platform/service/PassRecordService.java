@@ -28,6 +28,7 @@ public class PassRecordService {
 
     /**
      * 分页查询通行记录
+     * 适配实际数据库结构（字段为拼音简写，checkpointId为字符串格式如CP001）
      */
     public PageResult<Map<String, Object>> queryRecords(String plateNumber, String checkpointId,
                                                         LocalDateTime startTime, LocalDateTime endTime,
@@ -38,28 +39,27 @@ public class PassRecordService {
         
         Page<PassRecord> recordPage;
         
+        // 将前端传入的数字checkpointId转换为数据库中的字符串格式 CP001
+        String checkpointIdStr = null;
+        if (checkpointId != null && !checkpointId.isEmpty()) {
+            checkpointIdStr = "CP" + String.format("%03d", Integer.parseInt(checkpointId));
+        }
+        
         // 根据不同查询类型执行不同的查询逻辑
-        if ("speed".equals(queryType) && minSpeed != null) {
-            // 超速记录查询
-            if (startTime != null && endTime != null) {
-                recordPage = passRecordRepository.findBySpeedGreaterThanAndPassTimeBetween(
-                    new java.math.BigDecimal(minSpeed), startTime, endTime, pageRequest);
-            } else {
-                recordPage = passRecordRepository.findBySpeedGreaterThan(new java.math.BigDecimal(minSpeed), pageRequest);
-            }
-        } else if (plateNumber != null && !plateNumber.isEmpty()) {
+        // 注意：原表没有speed字段，超速查询暂时返回所有记录
+        if (plateNumber != null && !plateNumber.isEmpty()) {
             if (startTime != null && endTime != null) {
                 recordPage = passRecordRepository.findByPlateNumberContainingAndPassTimeBetween(
                     plateNumber, startTime, endTime, pageRequest);
             } else {
                 recordPage = passRecordRepository.findByPlateNumberContaining(plateNumber, pageRequest);
             }
-        } else if (checkpointId != null && !checkpointId.isEmpty()) {
+        } else if (checkpointIdStr != null) {
             if (startTime != null && endTime != null) {
-                recordPage = passRecordRepository.findByCheckpointIdAndPassTimeBetween(
-                    Long.parseLong(checkpointId), startTime, endTime, pageRequest);
+                recordPage = passRecordRepository.findByCheckpointIdStrAndPassTimeBetween(
+                    checkpointIdStr, startTime, endTime, pageRequest);
             } else {
-                recordPage = passRecordRepository.findByCheckpointId(Long.parseLong(checkpointId), pageRequest);
+                recordPage = passRecordRepository.findByCheckpointIdStr(checkpointIdStr, pageRequest);
             }
         } else if (startTime != null && endTime != null) {
             // 只有时间范围筛选
@@ -97,23 +97,34 @@ public class PassRecordService {
     
     /**
      * 转换记录为Map（带卡口名称）
+     * 适配实际数据库结构
      */
     private Map<String, Object> convertToMapWithName(PassRecord record, Map<Long, String> checkpointNameMap) {
         Map<String, Object> map = new HashMap<>();
         map.put("id", record.getId());
         map.put("plateNumber", record.getPlateNumber());
-        map.put("checkpointId", record.getCheckpointId());
-        // 使用卡口ID关联获取名称
-        map.put("checkpointName", checkpointNameMap.getOrDefault(record.getCheckpointId(), "卡口" + record.getCheckpointId()));
+        
+        // 从字符串格式 CP001 提取数字ID
+        Long checkpointIdNum = record.getCheckpointId();
+        map.put("checkpointId", checkpointIdNum);
+        
+        // 优先使用数据库中的卡口名称（checkpointNameDb），如果乱码则使用映射表
+        String dbName = record.getCheckpointNameDb();
+        if (dbName != null && !dbName.contains("?") && !dbName.isEmpty()) {
+            map.put("checkpointName", dbName);
+        } else {
+            map.put("checkpointName", checkpointNameMap.getOrDefault(checkpointIdNum, "卡口" + checkpointIdNum));
+        }
+        
         map.put("passTime", record.getPassTime() != null 
                 ? record.getPassTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) 
                 : null);
         map.put("direction", record.getDirection());
-        map.put("speed", record.getSpeed());
-        map.put("laneNo", record.getLaneNo());
+        map.put("speed", record.getSpeed());  // 原表无此字段，返回null
+        map.put("laneNo", record.getLaneNo()); // 原表无此字段，返回null
         map.put("vehicleType", record.getVehicleType());
-        map.put("etcDeduction", record.getEtcDeduction());
-        map.put("imageUrl", record.getImageUrl());
+        map.put("etcDeduction", record.getEtcDeduction()); // 原表无此字段，返回null
+        map.put("imageUrl", record.getImageUrl()); // 原表无此字段，返回null
         return map;
     }
 

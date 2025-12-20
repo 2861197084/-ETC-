@@ -4,3 +4,4 @@
 export * from './map'
 export * from './realtime'
 export * from './query'
+export * from './progressive'

@@ -197,6 +197,41 @@
           layout="total, sizes, prev, pager, next"
         />
       </div>
+
+      <!-- 渐进式加载：HBase历史数据 -->
+      <div v-if="hbaseData.length > 0" class="hbase-result-section">
+        <div class="hbase-header">
+          <el-tag type="warning">HBase 历史数据</el-tag>
+          <span class="count-info">已加载 {{ hbaseData.length }} 条</span>
+        </div>
+        <el-table :data="hbaseData" stripe border max-height="300">
+          <el-table-column
+            v-for="col in tableColumns"
+            :key="col.prop"
+            :prop="col.prop"
+            :label="col.label"
+            :width="col.width"
+            show-overflow-tooltip
+          />
+        </el-table>
+      </div>
+
+      <!-- 加载更多历史数据按钮 -->
+      <div class="load-more-wrapper">
+        <el-button
+          v-if="hasMoreHbaseData && queryResult.length > 0"
+          type="primary"
+          plain
+          :loading="hbaseLoading"
+          @click="loadMoreHbaseData"
+        >
+          <el-icon v-if="!hbaseLoading"><Download /></el-icon>
+          {{ hbaseLoading ? '加载中...' : '加载更多历史数据 (HBase)' }}
+        </el-button>
+        <span v-else-if="!hasMoreHbaseData && hbaseData.length > 0" class="no-more-text">
+          已加载全部历史数据
+        </span>
+      </div>
     </div>
 
     <!-- 查询历史 -->
@@ -235,6 +270,7 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { searchRecords, text2sql, executeQuery } from '@/api/admin/query'
+import { queryRecords, type PassRecordItem } from '@/api/admin/progressive'
 
 // 本地卡口配置映射（解决后端中文乱码问题）
 const checkpointNameMap: Record<number, string> = {
@@ -310,10 +346,67 @@ const pageSize = ref(20)
 // 查询历史
 const queryHistory = ref<any[]>([])
 
+// ========== HBase 历史数据加载 ==========
+const hbaseLoading = ref(false)
+const hbaseData = ref<PassRecordItem[]>([])
+const hbaseNextRowKey = ref<string | undefined>(undefined)
+const hasMoreHbaseData = ref(true)
+
+// 加载更多 HBase 历史数据
+async function loadMoreHbaseData() {
+  hbaseLoading.value = true
+
+  try {
+    const params: Record<string, unknown> = {
+      source: 'hbase',
+      lastRowKey: hbaseNextRowKey.value,
+      size: pageSize.value
+    }
+
+    // 使用当前查询的筛选条件
+    if (filters.plateNumber) {
+      params.plateNumber = filters.plateNumber
+    }
+    if (filters.stationId) {
+      params.checkpointId = filters.stationId
+    }
+    if (filters.dateRange && filters.dateRange.length === 2) {
+      params.startTime = (filters.dateRange[0] as Date).toISOString()
+      params.endTime = (filters.dateRange[1] as Date).toISOString()
+    }
+
+    const res = await queryRecords(params as Parameters<typeof queryRecords>[0])
+    
+    if (res.data && res.data.list) {
+      // 映射卡口名称
+      const mappedData = res.data.list.map((item: any) => ({
+        ...item,
+        checkpointName: checkpointNameMap[item.checkpointId] || `卡口${item.checkpointId}`
+      }))
+      hbaseData.value = [...hbaseData.value, ...mappedData]
+      hbaseNextRowKey.value = res.data.nextRowKey
+      hasMoreHbaseData.value = !!res.data.nextRowKey && res.data.list.length > 0
+      ElMessage.success(`已加载 ${res.data.list.length} 条历史数据`)
+    } else {
+      hasMoreHbaseData.value = false
+    }
+  } catch (error) {
+    console.error('加载 HBase 数据失败:', error)
+    ElMessage.error('加载历史数据失败')
+  } finally {
+    hbaseLoading.value = false
+  }
+}
+
 // 快捷查询
 const handleQuickQuery = async () => {
   queryLoading.value = true
   const startTime = Date.now()
+  
+  // 重置 HBase 数据
+  hbaseData.value = []
+  hbaseNextRowKey.value = undefined
+  hasMoreHbaseData.value = true
   
   try {
     // 构建查询参数
@@ -772,6 +865,39 @@ const printData = () => {
         color: #8f959e;
       }
     }
+  }
+}
+
+// HBase 历史数据区域
+.hbase-result-section {
+  margin-top: 16px;
+  padding: 16px;
+  background: #fffef5;
+  border: 1px solid #ffeeba;
+  border-radius: 8px;
+
+  .hbase-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+
+    .count-info {
+      font-size: 13px;
+      color: #8f959e;
+    }
+  }
+}
+
+.load-more-wrapper {
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+  border-top: 1px solid #e5e6eb;
+
+  .no-more-text {
+    color: #8f959e;
+    font-size: 13px;
   }
 }
 </style>

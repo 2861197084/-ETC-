@@ -1,20 +1,24 @@
-databaseName: etc
+﻿databaseName: etc
 
 dataSources:
   ds_0:
-    dataSourceClassName: com.zaxxer.hikari.HikariDataSource
-    driverClassName: com.mysql.cj.jdbc.Driver
-    jdbcUrl: jdbc:mysql://mysql0:3306/etc?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
-    username: etc
-    password: etcpass
+    url: jdbc:mysql://mysql0:3306/etc?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: root
+    password: root
+    connectionTimeoutMilliseconds: 30000
+    idleTimeoutMilliseconds: 60000
+    maxLifetimeMilliseconds: 1800000
     maxPoolSize: 30
+    minPoolSize: 1
   ds_1:
-    dataSourceClassName: com.zaxxer.hikari.HikariDataSource
-    driverClassName: com.mysql.cj.jdbc.Driver
-    jdbcUrl: jdbc:mysql://mysql1:3306/etc?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
-    username: etc
-    password: etcpass
+    url: jdbc:mysql://mysql1:3306/etc?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: root
+    password: root
+    connectionTimeoutMilliseconds: 30000
+    idleTimeoutMilliseconds: 60000
+    maxLifetimeMilliseconds: 1800000
     maxPoolSize: 30
+    minPoolSize: 1
 
 rules:
   - !SHARDING
@@ -32,8 +36,6 @@ rules:
         keyGenerateStrategy:
           column: id
           keyGeneratorName: snowflake
-    broadcastTables:
-      - checkpoint_dim
     shardingAlgorithms:
       pass_record_db_inline:
         type: INLINE
@@ -46,7 +48,15 @@ rules:
     keyGenerators:
       snowflake:
         type: SNOWFLAKE
-
-props:
-  sql-show: true
-
+  - !BROADCAST
+    tables:
+      - sys_user
+      - sys_role
+      - vehicle
+      - checkpoint
+      - checkpoint_dim
+      - checkpoint_flow
+      - violation
+      - clone_plate_detection
+      - alert
+      - appeal

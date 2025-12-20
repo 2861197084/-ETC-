@@ -21,6 +21,7 @@ import java.sql.PreparedStatement;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Iterator;
 import java.util.Map;
 
 /**
@@ -76,7 +77,7 @@ public class ClonePlateDetectJob {
         @Override
         public void processElement(PassRecordEvent event, Context ctx, Collector<ClonePlateRecord> out) throws Exception {
             String plateNumber = event.getPlateNumber();
-            Long currentCheckpoint = event.getCheckpointId();
+            Long currentCheckpoint = event.getCheckpointIdNum();
             LocalDateTime currentTime = LocalDateTime.now();
             
             // 检查是否与最近的记录冲突
@@ -87,11 +88,14 @@ public class ClonePlateDetectJob {
                 // 跳过相同卡口
                 if (prevCheckpoint.equals(currentCheckpoint)) continue;
                 
-                // 计算时间差（分钟）
-                long timeDiffMinutes = Duration.between(prevTime, currentTime).toMinutes();
+                // 计算时间差（秒）
+                long timeDiffSeconds = Duration.between(prevTime, currentTime).getSeconds();
                 
-                // 只检查10分钟内的记录
-                if (timeDiffMinutes > 10 || timeDiffMinutes <= 0) continue;
+                // 只检查10分钟(600秒)内的记录，且至少1秒
+                if (timeDiffSeconds > 600 || timeDiffSeconds < 1) continue;
+                
+                // 转换为分钟用于后续计算（保留小数）
+                double timeDiffMinutes = timeDiffSeconds / 60.0;
                 
                 // 获取卡口之间的距离
                 String distKey = Math.min(prevCheckpoint, currentCheckpoint) + "-" + Math.max(prevCheckpoint, currentCheckpoint);
@@ -105,8 +109,8 @@ public class ClonePlateDetectJob {
                 
                 // 如果实际时间差小于理论最短时间的80%，判定为疑似套牌
                 if (timeDiffMinutes < minTravelTimeMinutes * 0.8) {
-                    // 计算推算速度
-                    double calculatedSpeed = (distance / timeDiffMinutes) * 60;
+                    // 计算推算速度 (km/h)
+                    double calculatedSpeed = timeDiffMinutes > 0 ? (distance / timeDiffMinutes) * 60 : 9999;
                     
                     // 创建套牌记录
                     ClonePlateRecord record = new ClonePlateRecord();
@@ -118,13 +122,13 @@ public class ClonePlateDetectJob {
                     record.checkpoint2Name = FlinkConfig.CHECKPOINT_NAME_MAP.getOrDefault(currentCheckpoint, "卡口" + currentCheckpoint);
                     record.checkpoint2Time = currentTime;
                     record.distance = distance;
-                    record.timeDiff = (int) timeDiffMinutes;
+                    record.timeDiff = (int) timeDiffSeconds; // 存储秒数而不是分钟
                     record.calculatedSpeed = calculatedSpeed;
                     record.confidence = Math.min(0.99, 0.7 + (minTravelTimeMinutes - timeDiffMinutes) / minTravelTimeMinutes * 0.3);
                     
                     out.collect(record);
-                    LOG.warn("检测到疑似套牌车: {} 在{}分钟内从{}到{}, 推算时速{}km/h", 
-                            plateNumber, timeDiffMinutes, record.checkpoint1Name, record.checkpoint2Name, (int)calculatedSpeed);
+                    LOG.warn("检测到疑似套牌车: {} 在{}秒内从{}到{}, 推算时速{}km/h", 
+                            plateNumber, timeDiffSeconds, record.checkpoint1Name, record.checkpoint2Name, (int)calculatedSpeed);
                 }
             }
             
@@ -139,7 +143,13 @@ public class ClonePlateDetectJob {
         public void onTimer(long timestamp, OnTimerContext ctx, Collector<ClonePlateRecord> out) throws Exception {
             // 清理过期记录
             LocalDateTime expireTime = LocalDateTime.now().minusMinutes(10);
-            recentRecords.entries().removeIf(entry -> entry.getValue().isBefore(expireTime));
+            Iterator<Map.Entry<Long, LocalDateTime>> iterator = recentRecords.entries().iterator();
+            while (iterator.hasNext()) {
+                Map.Entry<Long, LocalDateTime> entry = iterator.next();
+                if (entry.getValue().isBefore(expireTime)) {
+                    iterator.remove();
+                }
+            }
         }
     }
     

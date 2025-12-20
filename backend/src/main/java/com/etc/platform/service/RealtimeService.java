@@ -75,6 +75,8 @@ public class RealtimeService {
         
         LocalDate today = LocalDate.now();
         LocalDateTime todayStart = today.atStartOfDay();
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime oneHourAgo = now.minusHours(1);
         
         // 1. 尝试从Redis读取总流量
         Object redisFlow = redisTemplate.opsForValue().get(REDIS_KEY_FLOW_TOTAL);
@@ -84,26 +86,34 @@ public class RealtimeService {
             // 回退到数据库查询
             Long totalFlow = flowRepository.sumTotalFlowByDate(today);
             if (totalFlow == null || totalFlow == 0) {
-                totalFlow = passRecordRepository.countByPassTimeBetween(todayStart, LocalDateTime.now());
+                totalFlow = passRecordRepository.countByPassTimeBetween(todayStart, now);
             }
             stats.setTotalFlow(totalFlow != null ? totalFlow.intValue() : 0);
         }
+        
+        // 1.1 最近一小时流量
+        Long hourlyFlow = passRecordRepository.countByPassTimeBetween(oneHourAgo, now);
+        stats.setHourlyFlow(hourlyFlow != null ? hourlyFlow.intValue() : 0);
         
         // 2. 尝试从Redis读取总营收
         Object redisRevenue = redisTemplate.opsForValue().get(REDIS_KEY_REVENUE_TODAY);
         if (redisRevenue != null) {
             stats.setTotalRevenue(Integer.parseInt(redisRevenue.toString()) / 100); // 分转元
         } else {
-            BigDecimal revenue = passRecordRepository.sumEtcDeductionByPassTimeBetween(todayStart, LocalDateTime.now());
+            BigDecimal revenue = passRecordRepository.sumEtcDeductionByPassTimeBetween(todayStart, now);
             stats.setTotalRevenue(revenue != null ? revenue.intValue() : 0);
         }
+        
+        // 2.1 最近一小时收入
+        BigDecimal hourlyRevenue = passRecordRepository.sumEtcDeductionByPassTimeBetween(oneHourAgo, now);
+        stats.setHourlyRevenue(hourlyRevenue != null ? hourlyRevenue.intValue() : 0);
         
         // 3. 尝试从Redis读取平均车速
         Object redisSpeed = redisTemplate.opsForHash().get(REDIS_KEY_AVG_SPEED, "avg");
         if (redisSpeed != null) {
-            stats.setAvgSpeed(Integer.parseInt(redisSpeed.toString()));
+            stats.setAvgSpeed(new BigDecimal(redisSpeed.toString()));
         } else {
-            stats.setAvgSpeed(85); // 默认值
+            stats.setAvgSpeed(BigDecimal.valueOf(85)); // 默认值
         }
         
         // 4. 卡口数量
@@ -408,8 +418,45 @@ public class RealtimeService {
         return baseFlow + new Random().nextInt(100);
     }
     
-    public List<Map<String, Object>> getClonePlateDetections(String date, int page, int pageSize) {
-        return getClonePlateList(page, pageSize);
+    public List<Map<String, Object>> getClonePlateDetections(String status, int page, int pageSize) {
+        PageRequest pageRequest = PageRequest.of(page - 1, pageSize, Sort.by(Sort.Direction.DESC, "detectionTime"));
+        Page<ClonePlateDetection> detections;
+        
+        // 按状态筛选
+        if (status != null && !status.isEmpty()) {
+            try {
+                Integer statusInt = Integer.parseInt(status);
+                detections = clonePlateRepository.findByStatus(statusInt, pageRequest);
+            } catch (NumberFormatException e) {
+                detections = clonePlateRepository.findAll(pageRequest);
+            }
+        } else {
+            detections = clonePlateRepository.findAll(pageRequest);
+        }
+        
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (ClonePlateDetection d : detections.getContent()) {
+            Map<String, Object> record = new HashMap<>();
+            record.put("id", d.getId());
+            record.put("plateNumber", d.getPlateNumber());
+            record.put("detectionTime", d.getDetectionTime() != null ? d.getDetectionTime().toString() : null);
+            record.put("checkpoint1Id", d.getCheckpoint1Id());
+            record.put("checkpoint1Name", d.getCheckpoint1Name() != null ? d.getCheckpoint1Name() : 
+                CHECKPOINT_NAME_MAP.getOrDefault(d.getCheckpoint1Id(), "卡口" + d.getCheckpoint1Id()));
+            record.put("checkpoint1Time", d.getCheckpoint1Time() != null ? d.getCheckpoint1Time().toString() : null);
+            record.put("checkpoint2Id", d.getCheckpoint2Id());
+            record.put("checkpoint2Name", d.getCheckpoint2Name() != null ? d.getCheckpoint2Name() :
+                CHECKPOINT_NAME_MAP.getOrDefault(d.getCheckpoint2Id(), "卡口" + d.getCheckpoint2Id()));
+            record.put("checkpoint2Time", d.getCheckpoint2Time() != null ? d.getCheckpoint2Time().toString() : null);
+            record.put("distance", d.getDistance());
+            record.put("timeDiff", d.getTimeDiff());
+            record.put("calculatedSpeed", d.getCalculatedSpeed());
+            record.put("confidence", d.getConfidence());
+            record.put("status", d.getStatus());
+            list.add(record);
+        }
+        
+        return list;
     }
     
     public List<Map<String, Object>> getViolations(String type, String date, int page, int pageSize) {

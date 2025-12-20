@@ -1,0 +1,40 @@
+# Flink配置
+flink:
+  checkpoint:
+    interval: 60000
+    timeout: 120000
+  parallelism: 2
+  rest:
+    port: 8083
+
+# Kafka配置
+kafka:
+  bootstrap-servers: localhost:9092
+  topics:
+    pass-records: etc-pass-records
+    alerts: etc-alerts
+  consumer:
+    group-id: etc-flink-consumer
+    auto-offset-reset: latest
+
+# MySQL配置
+mysql:
+  url: jdbc:mysql://localhost:13306/etc_system?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8
+  username: root
+  password: root123
+  driver-class-name: com.mysql.cj.jdbc.Driver
+
+# Redis配置
+redis:
+  host: localhost
+  port: 6379
+  database: 0
+  timeout: 3000
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    com.etc.flink: DEBUG
+    org.apache.flink: WARN
+    org.apache.kafka: WARN

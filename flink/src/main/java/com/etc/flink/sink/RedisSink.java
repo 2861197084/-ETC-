@@ -79,7 +79,7 @@ public class RedisSink<T> extends RichSinkFunction<T> {
     /**
      * Redis映射接口
      */
-    public interface RedisMapper<T> {
+    public interface RedisMapper<T> extends java.io.Serializable {
         String getCommand();
         String getKey(T value);
         default String getValue(T value) { return ""; }

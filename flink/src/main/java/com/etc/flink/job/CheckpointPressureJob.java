@@ -32,10 +32,11 @@ public class CheckpointPressureJob {
         
         // 按卡口ID分组，5分钟窗口统计流量
         DataStream<Tuple4<Long, String, Long, Integer>> pressureData = source
+                .filter(e -> e.getCheckpointIdNum() != null)
                 .map(new MapFunction<PassRecordEvent, Tuple2<Long, Long>>() {
                     @Override
                     public Tuple2<Long, Long> map(PassRecordEvent e) {
-                        return Tuple2.of(e.getCheckpointId(), 1L);
+                        return Tuple2.of(e.getCheckpointIdNum(), 1L);
                     }
                 })
                 .keyBy(t -> t.f0)
