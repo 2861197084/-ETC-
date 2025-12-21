@@ -121,29 +121,37 @@ public class QueryController {
     @GetMapping("/options/checkpoints")
     @Operation(summary = "获取卡口选项列表")
     public ResponseEntity<ApiResponse<List<Map<String, String>>>> getCheckpointOptions() {
-        // 返回 19 个卡口选项
+        // 返回 19 个卡口选项（与前端 checkpoints.ts 配置一致）
         List<Map<String, String>> options = List.of(
-                Map.of("label", "苏皖界1(104省道)", "value", "CP001"),
-                Map.of("label", "苏皖界2(311国道)", "value", "CP002"),
-                Map.of("label", "苏皖界3(徐明高速)", "value", "CP003"),
-                Map.of("label", "苏皖界4(宿新高速)", "value", "CP004"),
-                Map.of("label", "苏皖界5(徐淮高速)", "value", "CP005"),
-                Map.of("label", "苏皖界6(新扬高速)", "value", "CP006"),
-                Map.of("label", "苏鲁界1(206国道)", "value", "CP007"),
-                Map.of("label", "苏鲁界2(104国道)", "value", "CP008"),
-                Map.of("label", "苏鲁界3(京台高速)", "value", "CP009"),
-                Map.of("label", "苏鲁界4(枣庄连接线)", "value", "CP010"));
+                Map.of("label", "G104苏皖界(睢宁)", "value", "CP001", "boundary", "苏皖界"),
+                Map.of("label", "G310苏皖界(铜山)", "value", "CP002", "boundary", "苏皖界"),
+                Map.of("label", "S323阿湖卡口(新沂)", "value", "CP003", "boundary", "连云港界"),
+                Map.of("label", "G311苏皖界(铜山)", "value", "CP004", "boundary", "苏皖界"),
+                Map.of("label", "S253苏鲁界(沛县)", "value", "CP005", "boundary", "苏鲁界"),
+                Map.of("label", "S323瓦窑检查站(新沂)", "value", "CP006", "boundary", "市际"),
+                Map.of("label", "S250苏鲁界(邳州)", "value", "CP007", "boundary", "苏鲁界"),
+                Map.of("label", "S505宿迁界(新沂)", "value", "CP008", "boundary", "宿迁界"),
+                Map.of("label", "S324桑庄卡口(睢宁)", "value", "CP009", "boundary", "市际"),
+                Map.of("label", "G518马楼公路站(丰县)", "value", "CP010", "boundary", "苏鲁界"),
+                Map.of("label", "G237荣庄卡口(丰县)", "value", "CP011", "boundary", "苏鲁界"),
+                Map.of("label", "G235交界卡口(新沂)", "value", "CP012", "boundary", "市际"),
+                Map.of("label", "S251苏鲁界(邳州)", "value", "CP013", "boundary", "苏鲁界"),
+                Map.of("label", "梁寨检查站(丰县)", "value", "CP014", "boundary", "市际"),
+                Map.of("label", "G104苏鲁界(铜山)", "value", "CP015", "boundary", "苏鲁界"),
+                Map.of("label", "G3京台高速苏鲁界", "value", "CP016", "boundary", "苏鲁界"),
+                Map.of("label", "S325淮宿线卡口(睢宁)", "value", "CP017", "boundary", "市际"),
+                Map.of("label", "S252苏皖界(睢宁)", "value", "CP018", "boundary", "苏皖界"),
+                Map.of("label", "G206苏皖界(铜山)", "value", "CP019", "boundary", "苏皖界")
+        );
         return ResponseEntity.ok(ApiResponse.success(options));
     }
 
     @GetMapping("/options/vehicle-types")
-    @Operation(summary = "获取车辆类型选项")
+    @Operation(summary = "获取车辆类型选项（已弃用）")
+    @Deprecated
     public ResponseEntity<ApiResponse<List<Map<String, String>>>> getVehicleTypeOptions() {
-        List<Map<String, String>> options = List.of(
-                Map.of("label", "小型客车", "value", "小型客车"),
-                Map.of("label", "中型客车", "value", "中型客车"),
-                Map.of("label", "小型货车", "value", "小型货车"),
-                Map.of("label", "大型货车", "value", "大型货车"));
+        // 该接口已弃用，前端不再使用车辆类型进行查询
+        List<Map<String, String>> options = List.of();
         return ResponseEntity.ok(ApiResponse.success(options));
     }
 }
