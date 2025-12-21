@@ -22,6 +22,7 @@
   - 历史数据入库（2023-12 → HBase）: `python -m scripts.import_to_hbase`
   - 实时数据模拟（2024-01 → Kafka）: `python -m scripts.realtime_simulator`
 - Flink jobs（需要先编译 `flink-jobs/`，JAR 会挂载到 JobManager）:
+  - 检查 JAR 是否挂载: `docker compose exec flink-jobmanager ls -la /opt/flink/jobs`
   - MySQL 热数据落库: `docker compose exec flink-jobmanager flink run -d -c com.etc.flink.MySqlStorageJob /opt/flink/jobs/etc-flink-jobs-1.0.0.jar`
   - HBase 归档落库: `docker compose exec flink-jobmanager flink run -d -c com.etc.flink.HBaseStorageJob /opt/flink/jobs/etc-flink-jobs-1.0.0.jar`
 
