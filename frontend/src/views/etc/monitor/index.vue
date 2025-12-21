@@ -14,6 +14,15 @@
           <el-icon><Sunny /></el-icon>
           <span>晴 12°C</span>
         </div>
+        <el-button 
+          type="primary" 
+          :icon="Refresh" 
+          :loading="isRefreshing"
+          @click="handleManualRefresh"
+          class="refresh-btn"
+        >
+          刷新数据
+        </el-button>
       </div>
       <div class="header-right">
         <div class="current-time">
@@ -129,11 +138,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { Sunny, Van, Money, Odometer, Connection, Warning } from '@element-plus/icons-vue'
+import { Sunny, Van, Money, Odometer, Connection, Warning, Refresh } from '@element-plus/icons-vue'
 import { XuzhouTrafficMap, BloomStats, RegionRank, AlertTicker, ClonePlateAlert } from '@/components/business/etc'
 import { getDailyStats, getViolations, getClonePlates } from '@/api/admin/realtime'
 import { getCheckpoints } from '@/api/admin/map'
-import { checkpoints as localCheckpoints } from '@/config/checkpoints'
 import { useSimulatedClock } from '@/hooks/core/useSimulatedClock'
 
 defineOptions({ name: 'EtcMonitor' })
@@ -310,6 +318,7 @@ const viewStationDetail = () => {
 }
 
 let dataTimer: number | null = null
+const isRefreshing = ref(false)
 
 // 加载所有数据
 const loadAllData = async () => {
@@ -320,10 +329,28 @@ const loadAllData = async () => {
   ])
 }
 
+// 手动刷新
+const handleManualRefresh = async () => {
+  if (isRefreshing.value) return
+  isRefreshing.value = true
+  try {
+    await loadAllData()
+    console.log('📊 手动刷新完成')
+  } finally {
+    isRefreshing.value = false
+  }
+}
+
+// 暴露给父组件或外部调用
+defineExpose({ refresh: handleManualRefresh })
+
 onMounted(() => {
   loadAllData()
-  // 每30秒刷新数据
-  dataTimer = window.setInterval(loadAllData, 30000)
+  // 每12秒自动刷新数据（系统内12秒 = 模拟1小时）
+  dataTimer = window.setInterval(() => {
+    console.log('⏰ 自动刷新数据大屏 (12s interval)')
+    loadAllData()
+  }, 12000)
 })
 
 onUnmounted(() => {
@@ -368,6 +395,10 @@ onUnmounted(() => {
   }
 
   .header-center {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    
     .weather-info {
       display: flex;
       align-items: center;
@@ -377,6 +408,10 @@ onUnmounted(() => {
       border-radius: 20px;
       color: #1890ff;
       font-size: 14px;
+    }
+    
+    .refresh-btn {
+      border-radius: 20px;
     }
   }
 

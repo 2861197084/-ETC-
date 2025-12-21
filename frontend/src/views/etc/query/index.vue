@@ -1,8 +1,8 @@
 <template>
   <div class="query-page">
     <div class="page-header">
-      <h2 class="page-title">离线数据查询</h2>
-      <p class="page-desc">支持快速筛选和自定义 SQL 查询，分析交通数据</p>
+      <h2 class="page-title">数据查询</h2>
+      <p class="page-desc">支持车流量统计和套牌嫌疑查询，分析交通数据</p>
     </div>
 
     <!-- Tab 切换：快捷查询 / 高级查询 -->
@@ -14,9 +14,6 @@
           <div class="query-type-selector">
             <el-radio-group v-model="queryType" size="large">
               <el-radio-button value="traffic">车流量统计</el-radio-button>
-              <el-radio-button value="revenue">营收统计</el-radio-button>
-              <el-radio-button value="violation">违章查询</el-radio-button>
-              <el-radio-button value="speed">超速记录</el-radio-button>
               <el-radio-button value="clone">套牌嫌疑</el-radio-button>
             </el-radio-group>
           </div>
@@ -37,55 +34,71 @@
                 />
               </el-form-item>
 
-              <!-- 站点选择 -->
-              <el-form-item label="收费站" v-if="['traffic', 'revenue'].includes(queryType)">
-                <el-select v-model="filters.stationId" placeholder="全部站点" clearable style="width: 180px">
-                  <el-option label="徐州东站" value="1" />
-                  <el-option label="铜山收费站" value="2" />
-                  <el-option label="贾汪收费站" value="3" />
-                  <el-option label="新沂收费站" value="4" />
-                  <el-option label="邳州收费站" value="5" />
+              <!-- 卡口选择 - 车流量统计 -->
+              <el-form-item label="卡口" v-if="queryType === 'traffic'">
+                <el-select 
+                  v-model="filters.checkpointId" 
+                  placeholder="全部卡口" 
+                  clearable 
+                  filterable
+                  style="width: 220px"
+                >
+                  <el-option-group label="省际卡口（苏皖界）">
+                    <el-option 
+                      v-for="cp in checkpointOptions.filter(c => c.boundary === '苏皖界')" 
+                      :key="cp.id" 
+                      :label="cp.name" 
+                      :value="cp.id" 
+                    />
+                  </el-option-group>
+                  <el-option-group label="省际卡口（苏鲁界）">
+                    <el-option 
+                      v-for="cp in checkpointOptions.filter(c => c.boundary === '苏鲁界')" 
+                      :key="cp.id" 
+                      :label="cp.name" 
+                      :value="cp.id" 
+                    />
+                  </el-option-group>
+                  <el-option-group label="市际卡口">
+                    <el-option 
+                      v-for="cp in checkpointOptions.filter(c => !['苏皖界', '苏鲁界'].includes(c.boundary))" 
+                      :key="cp.id" 
+                      :label="cp.name" 
+                      :value="cp.id" 
+                    />
+                  </el-option-group>
                 </el-select>
               </el-form-item>
 
-              <!-- 车辆类型 -->
-              <el-form-item label="车辆类型" v-if="['traffic', 'revenue', 'speed'].includes(queryType)">
-                <el-select v-model="filters.vehicleType" placeholder="全部类型" clearable style="width: 140px">
-                  <el-option label="小型车" value="1" />
-                  <el-option label="中型车" value="2" />
-                  <el-option label="大型车" value="3" />
-                  <el-option label="特大型车" value="4" />
+              <!-- 通行方向 - 车流量统计 -->
+              <el-form-item label="通行方向" v-if="queryType === 'traffic'">
+                <el-select v-model="filters.direction" placeholder="全部方向" clearable style="width: 120px">
+                  <el-option label="进城" value="进城" />
+                  <el-option label="出城" value="出城" />
                 </el-select>
               </el-form-item>
 
-              <!-- 车牌号 -->
-              <el-form-item label="车牌号" v-if="['violation', 'speed', 'clone'].includes(queryType)">
-                <el-input v-model="filters.plateNumber" placeholder="输入车牌号" clearable style="width: 140px" />
-              </el-form-item>
-
-              <!-- 违章类型 -->
-              <el-form-item label="违章类型" v-if="queryType === 'violation'">
-                <el-select v-model="filters.violationType" placeholder="全部类型" clearable style="width: 160px">
-                  <el-option label="超速" value="speeding" />
-                  <el-option label="闯禁区" value="forbidden" />
-                  <el-option label="逆行" value="reverse" />
-                  <el-option label="占用应急车道" value="emergency" />
-                </el-select>
-              </el-form-item>
-
-              <!-- 速度阈值 -->
-              <el-form-item label="速度阈值" v-if="queryType === 'speed'">
-                <el-input-number v-model="filters.speedThreshold" :min="60" :max="200" :step="10" />
-                <span class="unit-text">km/h 以上</span>
-              </el-form-item>
-
-              <!-- 统计维度 -->
-              <el-form-item label="统计维度" v-if="['traffic', 'revenue'].includes(queryType)">
+              <!-- 统计维度 - 车流量统计 -->
+              <el-form-item label="统计维度" v-if="queryType === 'traffic'">
                 <el-select v-model="filters.groupBy" style="width: 140px">
-                  <el-option label="按站点" value="station" />
+                  <el-option label="按卡口" value="checkpoint" />
                   <el-option label="按小时" value="hour" />
                   <el-option label="按天" value="day" />
-                  <el-option label="按车型" value="vehicle" />
+                  <el-option label="按区县" value="region" />
+                </el-select>
+              </el-form-item>
+
+              <!-- 车牌号 - 套牌嫌疑 -->
+              <el-form-item label="车牌号" v-if="queryType === 'clone'">
+                <el-input v-model="filters.plateNumber" placeholder="输入车牌号查询" clearable style="width: 140px" />
+              </el-form-item>
+
+              <!-- 状态 - 套牌嫌疑 -->
+              <el-form-item label="处理状态" v-if="queryType === 'clone'">
+                <el-select v-model="filters.cloneStatus" placeholder="全部状态" clearable style="width: 140px">
+                  <el-option label="待处理" value="pending" />
+                  <el-option label="已确认" value="confirmed" />
+                  <el-option label="已排除" value="dismissed" />
                 </el-select>
               </el-form-item>
             </el-form>
@@ -263,7 +276,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { 
   Search, Refresh, Download, Printer, Clock, 
   MagicStick, Document, CaretRight 
@@ -271,17 +284,28 @@ import {
 import { ElMessage } from 'element-plus'
 import { searchRecords, text2sql, executeQuery } from '@/api/admin/query'
 import { queryRecords, type PassRecordItem } from '@/api/admin/progressive'
+import { getClonePlates } from '@/api/admin/realtime'
+import { checkpoints } from '@/config/checkpoints'
 
-// 本地卡口配置映射（解决后端中文乱码问题）
-const checkpointNameMap: Record<number, string> = {
-  1: '苏皖界1(104省道)', 2: '苏皖界2(311国道)', 3: '苏皖界3(徐明高速)',
-  4: '苏皖界4(宿新高速)', 5: '苏皖界5(徐淮高速)', 6: '苏皖界6(新扬高速)',
-  7: '苏鲁界1(206国道)', 8: '苏鲁界2(104国道)', 9: '苏鲁界3(京台高速)',
-  10: '苏鲁界4(枣庄连接线)', 11: '苏鲁界5(京沪高速)', 12: '苏鲁界6(沂河路)',
-  13: '连云港界1(徐连高速)', 14: '连云港界2(310国道)', 15: '宿迁界1(徐宿高速)',
-  16: '宿迁界2(徐宿快速)', 17: '宿迁界3(104国道)', 18: '宿迁界4(新扬高速)',
-  19: '宿迁界5(徐盐高速)'
-}
+// 卡口选项（从配置文件加载，19个卡口）
+const checkpointOptions = computed(() => 
+  checkpoints.map(cp => ({
+    id: cp.id,
+    name: cp.name,
+    region: cp.region,
+    boundary: cp.boundary,
+    road: cp.road
+  }))
+)
+
+// 卡口ID到名称的映射
+const checkpointNameMap = computed(() => {
+  const map: Record<string, string> = {}
+  checkpoints.forEach(cp => {
+    map[cp.id] = cp.name
+  })
+  return map
+})
 
 defineOptions({ name: 'EtcQuery' })
 
@@ -292,13 +316,12 @@ const text2sqlLoading = ref(false)
 
 // 筛选条件
 const filters = reactive({
-  dateRange: [],
-  stationId: '',
-  vehicleType: '',
+  dateRange: [] as Date[],
+  checkpointId: '',  // 卡口ID（如 CP001）
+  direction: '',     // 通行方向
   plateNumber: '',
-  violationType: '',
-  speedThreshold: 120,
-  groupBy: 'station'
+  cloneStatus: '',   // 套牌处理状态
+  groupBy: 'checkpoint'
 })
 
 // 日期快捷选项
@@ -367,8 +390,8 @@ async function loadMoreHbaseData() {
     if (filters.plateNumber) {
       params.plateNumber = filters.plateNumber
     }
-    if (filters.stationId) {
-      params.checkpointId = filters.stationId
+    if (filters.checkpointId) {
+      params.checkpointId = filters.checkpointId
     }
     if (filters.dateRange && filters.dateRange.length === 2) {
       params.startTime = (filters.dateRange[0] as Date).toISOString()
@@ -381,7 +404,7 @@ async function loadMoreHbaseData() {
       // 映射卡口名称
       const mappedData = res.data.list.map((item: any) => ({
         ...item,
-        checkpointName: checkpointNameMap[item.checkpointId] || `卡口${item.checkpointId}`
+        checkpointName: checkpointNameMap.value[item.checkpointId] || `卡口${item.checkpointId}`
       }))
       hbaseData.value = [...hbaseData.value, ...mappedData]
       hbaseNextRowKey.value = res.data.nextRowKey
@@ -409,48 +432,12 @@ const handleQuickQuery = async () => {
   hasMoreHbaseData.value = true
   
   try {
-    // 构建查询参数
-    const params: Record<string, any> = {
-      page: currentPage.value,
-      pageSize: pageSize.value,
-      queryType: queryType.value // 告诉后端查询类型
-    }
-    
-    if (filters.dateRange && filters.dateRange.length === 2) {
-      params.startTime = (filters.dateRange[0] as Date).toISOString()
-      params.endTime = (filters.dateRange[1] as Date).toISOString()
-    }
-    if (filters.stationId) params.checkpointId = filters.stationId
-    if (filters.vehicleType) params.vehicleType = filters.vehicleType
-    if (filters.plateNumber) params.plateNumber = filters.plateNumber
-    
-    // 根据查询类型添加特定参数
-    if (queryType.value === 'speed') {
-      params.minSpeed = filters.speedThreshold
-    } else if (queryType.value === 'violation') {
-      params.violationType = filters.violationType || null
-    }
-    
-    console.log('🔍 查询参数:', params, '查询类型:', queryType.value)
-    const res = await searchRecords(params)
-    console.log('📋 查询响应:', res)
-    
-    if (res.code === 200 && res.data) {
-      // 根据查询类型设置不同的列
-      setColumnsForQueryType(queryType.value)
-      // 将 checkpointId 映射为卡口名称（解决后端中文乱码）
-      queryResult.value = (res.data.list || []).map((item: any) => ({
-        ...item,
-        checkpointName: checkpointNameMap[item.checkpointId] || `卡口${item.checkpointId}`
-      }))
-      totalCount.value = res.data.total || 0
-      queryTime.value = Date.now() - startTime
-      console.log('✅ 查询结果:', queryResult.value.length, '条')
-      
-      addToHistory('quick', getQueryDesc())
-      ElMessage.success(`查询完成，共 ${totalCount.value} 条记录`)
+    if (queryType.value === 'clone') {
+      // 套牌嫌疑查询 - 使用专门的套牌接口
+      await handleCloneQuery(startTime)
     } else {
-      ElMessage.error(res.msg || '查询失败')
+      // 车流量统计 - 使用通行记录接口
+      await handleTrafficQuery(startTime)
     }
   } catch (e: any) {
     console.error('查询失败:', e)
@@ -460,64 +447,126 @@ const handleQuickQuery = async () => {
   }
 }
 
+// 车流量统计查询
+const handleTrafficQuery = async (startTime: number) => {
+  const params: Record<string, any> = {
+    page: currentPage.value,
+    pageSize: pageSize.value
+  }
+  
+  if (filters.dateRange && filters.dateRange.length === 2) {
+    params.startTime = (filters.dateRange[0] as Date).toISOString()
+    params.endTime = (filters.dateRange[1] as Date).toISOString()
+  }
+  if (filters.checkpointId) params.checkpointId = filters.checkpointId
+  if (filters.direction) params.direction = filters.direction
+  
+  console.log('🔍 车流量查询参数:', params)
+  const res = await searchRecords(params)
+  console.log('📋 车流量查询响应:', res)
+  
+  if (res.code === 200 && res.data) {
+    setColumnsForQueryType('traffic')
+    // 将 checkpointId 映射为卡口名称
+    queryResult.value = (res.data.list || []).map((item: any) => ({
+      ...item,
+      checkpointName: checkpointNameMap.value[item.checkpointId] || item.checkpointName || `卡口${item.checkpointId}`
+    }))
+    totalCount.value = res.data.total || 0
+    queryTime.value = Date.now() - startTime
+    console.log('✅ 车流量查询结果:', queryResult.value.length, '条')
+    
+    addToHistory('quick', getQueryDesc())
+    ElMessage.success(`查询完成，共 ${totalCount.value} 条记录`)
+  } else {
+    ElMessage.error(res.msg || '查询失败')
+  }
+}
+
+// 套牌嫌疑查询
+const handleCloneQuery = async (startTime: number) => {
+  const params: Record<string, any> = {
+    page: currentPage.value,
+    pageSize: pageSize.value
+  }
+  
+  if (filters.cloneStatus) params.status = filters.cloneStatus
+  
+  console.log('🔍 套牌嫌疑查询参数:', params)
+  const res = await getClonePlates(params)
+  console.log('📋 套牌嫌疑查询响应:', res)
+  
+  if (res.code === 200 && res.data) {
+    setColumnsForQueryType('clone')
+    // 处理套牌数据，映射卡口名称
+    queryResult.value = (res.data.list || []).map((item: any) => ({
+      ...item,
+      checkpointName1: checkpointNameMap.value[item.checkpointId1] || item.checkpointId1,
+      checkpointName2: checkpointNameMap.value[item.checkpointId2] || item.checkpointId2,
+      // 计算可疑原因说明
+      suspectReason: formatSuspectReason(item)
+    }))
+    totalCount.value = res.data.total || 0
+    queryTime.value = Date.now() - startTime
+    
+    // 如果用户输入了车牌号，在前端过滤
+    if (filters.plateNumber) {
+      queryResult.value = queryResult.value.filter((item: any) => 
+        item.plateNumber?.includes(filters.plateNumber)
+      )
+      totalCount.value = queryResult.value.length
+    }
+    
+    console.log('✅ 套牌嫌疑查询结果:', queryResult.value.length, '条')
+    addToHistory('quick', getQueryDesc())
+    ElMessage.success(`查询完成，共 ${totalCount.value} 条记录`)
+  } else {
+    ElMessage.error(res.msg || '查询失败')
+  }
+}
+
+// 格式化套牌嫌疑原因
+const formatSuspectReason = (item: any): string => {
+  const timeDiff = item.timeDiffMinutes || item.time_diff_minutes
+  const distance = item.distanceKm || item.distance_km
+  const minSpeed = item.minSpeedRequired || item.min_speed_required
+  
+  if (timeDiff && distance && minSpeed) {
+    return `${timeDiff}分钟内出现在相距${distance}km的两个卡口，需时速${Math.round(minSpeed)}km/h以上`
+  }
+  return '短时间内出现在不同卡口，超出正常行驶能力'
+}
+
 // 根据查询类型设置表格列
 const setColumnsForQueryType = (type: string) => {
-  const baseColumns = [
-    { prop: 'plateNumber', label: '车牌号', width: 120 },
-    { prop: 'checkpointName', label: '卡口名称', width: 160 },
-    { prop: 'passTime', label: '通过时间', width: 180 }
-  ]
-  
   switch (type) {
     case 'traffic':
       tableColumns.value = [
-        ...baseColumns,
-        { prop: 'direction', label: '方向', width: 80 },
-        { prop: 'vehicleType', label: '车辆类型', width: 100 },
-        { prop: 'laneNo', label: '车道', width: 80 }
-      ]
-      break
-    case 'revenue':
-      tableColumns.value = [
-        ...baseColumns,
-        { prop: 'vehicleType', label: '车辆类型', width: 100 },
-        { prop: 'etcDeduction', label: '扣款金额(元)', width: 120, sortable: true }
-      ]
-      break
-    case 'violation':
-      tableColumns.value = [
         { prop: 'plateNumber', label: '车牌号', width: 120 },
-        { prop: 'checkpointName', label: '卡口名称', width: 160 },
-        { prop: 'passTime', label: '违章时间', width: 180 },
-        { prop: 'violationType', label: '违章类型', width: 100 },
-        { prop: 'speed', label: '实测速度', width: 100 },
-        { prop: 'status', label: '状态', width: 80 }
-      ]
-      break
-    case 'speed':
-      tableColumns.value = [
-        ...baseColumns,
-        { prop: 'speed', label: '速度(km/h)', width: 120, sortable: true },
+        { prop: 'checkpointName', label: '卡口名称', width: 180 },
+        { prop: 'passTime', label: '通过时间', width: 180 },
         { prop: 'direction', label: '方向', width: 80 },
-        { prop: 'vehicleType', label: '车辆类型', width: 100 }
+        { prop: 'district', label: '所属区县', width: 100 },
+        { prop: 'plateType', label: '车牌类型', width: 120 }
       ]
       break
     case 'clone':
       tableColumns.value = [
         { prop: 'plateNumber', label: '嫌疑车牌号', width: 120 },
-        { prop: 'checkpointName', label: '最近出现卡口', width: 160 },
-        { prop: 'passTime', label: '最近时间', width: 180 },
-        { prop: 'appearCount', label: '出现次数', width: 100 },
-        { prop: 'suspectReason', label: '嫌疑原因', width: 200 }
+        { prop: 'checkpointName1', label: '第一次出现卡口', width: 160 },
+        { prop: 'time1', label: '第一次时间', width: 160 },
+        { prop: 'checkpointName2', label: '第二次出现卡口', width: 160 },
+        { prop: 'time2', label: '第二次时间', width: 160 },
+        { prop: 'suspectReason', label: '嫌疑原因', width: 280 },
+        { prop: 'status', label: '状态', width: 90 }
       ]
       break
     default:
       tableColumns.value = [
-        ...baseColumns,
-        { prop: 'direction', label: '方向', width: 80 },
-        { prop: 'speed', label: '速度(km/h)', width: 100, sortable: true },
-        { prop: 'vehicleType', label: '车辆类型', width: 100 },
-        { prop: 'laneNo', label: '车道', width: 80 }
+        { prop: 'plateNumber', label: '车牌号', width: 120 },
+        { prop: 'checkpointName', label: '卡口名称', width: 180 },
+        { prop: 'passTime', label: '通过时间', width: 180 },
+        { prop: 'direction', label: '方向', width: 80 }
       ]
   }
 }
@@ -596,9 +645,6 @@ const executeSql = async () => {
 const getQueryDesc = () => {
   const typeMap: Record<string, string> = {
     traffic: '车流量统计',
-    revenue: '营收统计',
-    violation: '违章查询',
-    speed: '超速记录',
     clone: '套牌嫌疑'
   }
   return typeMap[queryType.value] || '数据查询'
@@ -620,12 +666,11 @@ const useHistoryQuery = (item: any) => {
 
 const resetFilters = () => {
   filters.dateRange = []
-  filters.stationId = ''
-  filters.vehicleType = ''
+  filters.checkpointId = ''
+  filters.direction = ''
   filters.plateNumber = ''
-  filters.violationType = ''
-  filters.speedThreshold = 120
-  filters.groupBy = 'station'
+  filters.cloneStatus = ''
+  filters.groupBy = 'checkpoint'
 }
 
 const clearHistory = () => {
