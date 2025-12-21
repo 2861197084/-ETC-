@@ -7,6 +7,9 @@ export HBASE_PID_DIR="/data/pids"
 
 mkdir -p "${HBASE_LOG_DIR}" "${HBASE_PID_DIR}" /data/hbase
 
+# 清理残留的 PID 文件（容器重启时可能残留）
+rm -f "${HBASE_PID_DIR}"/*.pid
+
 if [[ "${1:-}" == "shell" ]]; then
   shift
   exec "${HBASE_HOME}/bin/hbase" shell "$@"

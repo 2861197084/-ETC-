@@ -8,6 +8,8 @@ dist/
 dist-ssr/
 build/
 *.local
+**/target/
+dependency-reduced-pom.xml
 
 # Logs
 logs/
@@ -74,6 +76,10 @@ docker-compose.override.yml
 # data
 *.csv
 *.xlsx
-_pycache_/
-
+__pycache__/
 *.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/

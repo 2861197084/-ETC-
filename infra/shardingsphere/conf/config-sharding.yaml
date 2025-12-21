@@ -1,4 +1,4 @@
-﻿databaseName: etc
+databaseName: etc
 
 dataSources:
   ds_0:
@@ -44,7 +44,7 @@ rules:
       pass_record_tbl_inline:
         type: INLINE
         props:
-          algorithm-expression: pass_record_${plate_hash % 2}
+          algorithm-expression: pass_record_${(plate_hash / 2) % 2}
     keyGenerators:
       snowflake:
         type: SNOWFLAKE
@@ -56,7 +56,9 @@ rules:
       - checkpoint
       - checkpoint_dim
       - checkpoint_flow
+      - agg_checkpoint_minute
       - violation
       - clone_plate_detection
       - alert
       - appeal
+      - query_history

@@ -134,6 +134,7 @@ import { XuzhouTrafficMap, BloomStats, RegionRank, AlertTicker, ClonePlateAlert 
 import { getDailyStats, getViolations, getClonePlates } from '@/api/admin/realtime'
 import { getCheckpoints } from '@/api/admin/map'
 import { checkpoints as localCheckpoints } from '@/config/checkpoints'
+import { useSimulatedClock } from '@/hooks/core/useSimulatedClock'
 
 defineOptions({ name: 'EtcMonitor' })
 
@@ -141,8 +142,7 @@ defineOptions({ name: 'EtcMonitor' })
 const mapRef = ref()
 
 // 当前时间
-const currentTime = ref('')
-const currentDate = ref('')
+const { timeText: currentTime, dateText: currentDate } = useSimulatedClock({ autoStart: true })
 
 // 选中的收费站
 const selectedStation = ref<any>(null)
@@ -309,14 +309,6 @@ const viewStationDetail = () => {
   console.log('查看站点详情:', selectedStation.value)
 }
 
-// 更新时间
-const updateTime = () => {
-  const now = new Date()
-  currentTime.value = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-  currentDate.value = now.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'long' })
-}
-
-let timeTimer: number | null = null
 let dataTimer: number | null = null
 
 // 加载所有数据
@@ -329,15 +321,12 @@ const loadAllData = async () => {
 }
 
 onMounted(() => {
-  updateTime()
   loadAllData()
-  timeTimer = window.setInterval(updateTime, 1000)
   // 每30秒刷新数据
   dataTimer = window.setInterval(loadAllData, 30000)
 })
 
 onUnmounted(() => {
-  if (timeTimer) clearInterval(timeTimer)
   if (dataTimer) clearInterval(dataTimer)
 })
 </script>

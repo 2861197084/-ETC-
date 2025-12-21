@@ -1,3 +1,4 @@
 create_namespace 'etc'
-create 'etc:pass_records', {NAME => 'd', VERSIONS => 1, COMPRESSION => 'NONE'}
+create 'etc:pass_record', {NAME => 'd', VERSIONS => 1, COMPRESSION => 'NONE'}
 list
+exit

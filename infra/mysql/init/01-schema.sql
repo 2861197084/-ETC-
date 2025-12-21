@@ -1,7 +1,7 @@
 USE etc;
 
 CREATE TABLE IF NOT EXISTS pass_record_0 (
-  id BIGINT NOT NULL,
+  id BIGINT NOT NULL AUTO_INCREMENT,
   gcxh VARCHAR(64) NOT NULL,
   xzqhmc VARCHAR(128) NOT NULL,
   kkmc VARCHAR(128) NOT NULL,
@@ -33,4 +33,3 @@ CREATE TABLE IF NOT EXISTS agg_checkpoint_minute (
   flow BIGINT NOT NULL,
   PRIMARY KEY (checkpoint_id, minute_ts)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-

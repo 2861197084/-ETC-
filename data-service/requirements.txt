@@ -1,0 +1,12 @@
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+kafka-python-ng>=2.2.2
+pymysql>=1.1.1
+redis>=5.0.0
+pandas>=2.0.0
+python-multipart>=0.0.9
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+python-dateutil>=2.8.0
+requests>=2.31.0
+happybase>=1.2.0

@@ -1,228 +1,127 @@
 # ETC 高速公路大数据管理平台
 
-> 面向高速公路ETC系统的大数据管理平台，支持实时数据接入、可视化大屏、交互式查询和智能预测分析。
+> 面向高速公路 ETC 系统的大数据管理平台，支持实时数据接入、可视化大屏、交互式查询和智能预测分析。
 
-![Platform Preview](example/2.png)
-
-## 项目概述
-
-本平台是一个完整的高速公路ETC大数据管理解决方案，具备以下核心能力：
-
-- **实时数据接入**：支持 ≥50条/秒 的数据持续写入
-- **可视化大屏**：30秒自动刷新，全网态势一目了然
-- **交互式查询**：多条件组合查询，支持数据导出
-- **智能预测**：基于机器学习的车流预测与治理建议
-- **实时告警**：套牌车检测、拥堵预警等场景
-
-## 技术架构
+## 系统架构
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     展示层 (Frontend)                        │
-│  Vue 3 + Vite + TypeScript              │
-├─────────────────────────────────────────────────────────────┤
-│                     服务层 (Backend)                         │
-│  API Services / WebSocket / 缓存层 (Redis)                   │
-├─────────────────────────────────────────────────────────────┤
-│                     处理层 (Processing)                      │
-│  Flink 实时清洗 / 窗口聚合 / 告警检测                          │
-├─────────────────────────────────────────────────────────────┤
-│                     存储层 (Storage)                         │
-│  HBase (明细数据) / MySQL 分片 (聚合指标) / Kafka (消息队列)    │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                     展示层 (Frontend)                            │
+│  Vue 3 + Vite + TypeScript + Element Plus                       │
+├─────────────────────────────────────────────────────────────────┤
+│                     服务层 (Backend)                             │
+│  Spring Boot 3.x + REST API + Redis                             │
+├─────────────────────────────────────────────────────────────────┤
+│                     处理层 (Processing)                          │
+│  Python 数据服务 (模拟) + Flink (套牌检测/存储)                    │
+├─────────────────────────────────────────────────────────────────┤
+│                     存储层 (Storage)                             │
+│  MySQL + Redis + Kafka + HBase                            │
+└─────────────────────────────────────────────────────────────────┘
 ```
-
-## 功能模块
-
-### 1. 数据可视化大屏
-
-- **数据总览**：车辆总数、分类统计、实时 KPI 展示
-- **地图态势**：中国地图热力图，车辆来源分布
-- **趋势分析**：24小时车流趋势、分时段统计
-- **告警中心**：实时告警滚动、告警详情展示
-- **排行榜单**：车辆型号排行、站点流量 TOP
-
-### 2. 交互式查询
-
-- 多条件组合筛选（车牌、站点、时间、车型）
-- 查询结果表格展示与分页
-- 数据导出功能（CSV/Excel）
-- 车辆轨迹回放
-
-### 3. 离线预测与建议
-
-- 历史车流数据分析
-- 未来车流量预测（15/30/60分钟）
-- 治理建议生成
-- 场景模拟分析
-
-## 数据字段说明
-
-课程样例数据字段映射关系：
-
-| 原始字段 | 中文含义 | 数据类型 | 示例/说明 |
-|---------|---------|---------|----------|
-| `GCXH` | 序号 | BIGINT | 明细记录序号 |
-| `XZQHMC` | 行政区划 | VARCHAR | 省/市/区名称或代码 |
-| `KKMC` | 卡口名称 | VARCHAR | 门架/卡口名称 |
-| `FXLX` | 方向 | TINYINT/VARCHAR | 上行/下行/进城/出城 |
-| `GCSJ` | 过车时间 | DATETIME | 车辆经过卡口的时间 |
-| `HPZL` | 号牌种类 | TINYINT/VARCHAR | 蓝牌/黄牌/新能源等 |
-| `HPHM` | 车牌号码 | VARCHAR | 已脱敏：仅保留前4位 |
-| `CLPPXH` | 车辆品牌型号 | VARCHAR | 品牌+型号或编码 |
-
-> 注：车牌字段已做脱敏处理，仅保留前4位，其余用 `***` 替代。
 
 ## 快速开始
 
-### 环境要求
-
-- Node.js >= 18.0
-- npm >= 9.0
-- Docker Desktop（推荐，用于后端/大数据组件）
-
-### 安装与运行
+### 1. 启动 Docker 服务
 
 ```bash
-# 进入前端目录
-cd frontend
-
-# 安装依赖
-npm install
-
-# 启动开发服务器
-npm run dev
-
-# 构建生产版本
-npm run build
-```
-
-## 后端环境（Docker）
-
-后端与大数据组件统一用 Docker Compose 搭建（Kafka + Flink + MySQL 分片 + ShardingSphere-Proxy + Redis，HBase/Spark 可选）。
-
-```bash
-# 启动基础组件
+# 启动所有服务（首次需要 --build）
 docker compose up -d --build
-
-# 启用 HBase（明细存储）
-docker compose --profile hbase up -d --build
-
-# 启用 Spark（离线训练/预测）
-docker compose --profile spark up -d --build
 ```
 
-详细说明见：`infra/README.md`
+### 1.1 数据导入与实时模拟（推荐）
 
-## 前后端联调（开发）
+> 历史数据仅入 HBase；实时数据通过 Kafka→Flink 落 MySQL（热数据）并写入 HBase（归档）。
 
-- 默认前端使用 `frontend/.env.development` 中的 Mock 地址
-- 如需对接本地后端：参考 `frontend/.env.development.local.example` 创建 `frontend/.env.development.local`
+```bash
+# 1) 提交 Flink 作业（先编译 flink-jobs）
+cd flink-jobs && mvn clean package -DskipTests
+docker compose exec flink-jobmanager flink run -d -c com.etc.flink.MySqlStorageJob /opt/flink/jobs/etc-flink-jobs-1.0.0.jar
+docker compose exec flink-jobmanager flink run -d -c com.etc.flink.HBaseStorageJob /opt/flink/jobs/etc-flink-jobs-1.0.0.jar
 
-### 访问地址
+# 2) 导入历史数据（2023-12 → HBase，同时写入 Redis 历史统计；一次性容器用 --rm 自动清理）
+docker compose run --rm data-service python -m scripts.import_to_hbase
 
-- 开发环境：http://localhost:5174 （端口可能因占用而变化）
-- 系统首页：http://localhost:5174/
-- ETC实时监控：http://localhost:5174/etc/monitor
-- 数据查询中心：http://localhost:5174/etc/query
-- 离线预测分析：http://localhost:5174/etc/prediction
+# 3) 启动实时模拟（2024-01 → Kafka，基于后端虚拟时间窗口）
+docker compose run --rm data-service python -m scripts.realtime_simulator
+```
 
-> 注：前端基于开源项目 art-design-pro，已通过路由配置隐藏无关模块菜单，仅显示ETC大数据平台相关功能。
+### 2. 启动前端
+
+```bash
+cd frontend
+pnpm install
+pnpm dev
+```
+
+### 3. 访问地址
+
+| 服务 | 地址 |
+|------|------|
+| 前端 | http://localhost:5173 |
+| 后端 API | http://localhost:8080 |
+| API 文档 | http://localhost:8080/docs |
+| Flink UI | http://localhost:8081 |
+
+## 时间模拟系统
+
+系统支持时间模拟，用于演示：
+- 模拟时间从 **2024-01-01 00:00** 开始
+- 每 **1 真实秒 = 5 模拟分钟**
+- 前端页面右上角显示当前模拟时间（替代真实时间显示）
+
+**API 接口：**
+```
+GET  /api/time        # 获取当前时间状态
+POST /api/time/start  # 启动模拟
+POST /api/time/pause  # 暂停模拟
+POST /api/time/reset  # 重置
+```
+
+## 查询路由与统计
+
+- 热数据（近 7 天）：ShardingSphere Proxy（逻辑表 `pass_record` → `mysql0/mysql1` 的 `pass_record_0/1`）
+- 历史数据（全量）：HBase（`etc:pass_record`）
+- 统计汇总：Redis（后端定时刷新热数据统计；历史导入时写入历史总量统计）
+- MySQL 热数据清理：后端按虚拟时间执行 7 天游标清理（见 `backend/src/main/resources/application.yml` 的 `etc.retention.*`）
 
 ## 项目结构
 
 ```
-etc-bigdata-platform/
-├── frontend/                    # 前端项目（基于 art-design-pro）
-│   ├── src/
-│   │   ├── api/                # API 接口定义
-│   │   ├── assets/             # 静态资源
-│   │   ├── components/         # 通用组件
-│   │   │   └── business/etc/   # ETC业务组件
-│   │   ├── config/             # 配置文件
-│   │   ├── directives/         # Vue指令
-│   │   ├── hooks/              # 组合式函数
-│   │   ├── locales/            # 国际化配置
-│   │   ├── mock/               # Mock 数据
-│   │   ├── router/             # 路由配置
-│   │   │   └── modules/        # 路由模块
-│   │   │       ├── etc.ts      # ETC路由（显示）
-│   │   │       └── ...         # 其他路由（已隐藏菜单）
-│   │   ├── store/              # Pinia 状态管理
-│   │   ├── types/              # TypeScript类型定义
-│   │   ├── utils/              # 工具函数
-│   │   └── views/              # 页面视图
-│   │       ├── etc/            # ETC相关页面 ✅
-│   │       │   ├── monitor/    # 实时监控指挥舱
-│   │       │   ├── query/      # 数据查询中心
-│   │       │   └── prediction/ # 离线预测分析
-│   │       ├── auth/           # 认证页面（菜单已隐藏）
-│   │       ├── dashboard/      # 原框架大屏（菜单已隐藏）
-│   │       └── ...             # 其他模块（菜单已隐藏）
-│   └── package.json
-├── data/                        # 样例数据
-├── example/                     # 设计参考
-├── README.md                    # 项目说明
-├── 需求文档.md                  # 需求分析
-├── 实施方案.md                  # 实施分工
-├── 实施进度.md                  # 进度跟踪
-└── 设计文档.md                  # 设计文档
+/
+├── backend/           # Java Spring Boot 后端
+├── frontend/          # Vue 3 前端
+├── data-service/      # Python 数据服务
+├── flink-jobs/        # Flink 流处理作业
+├── infra/             # Docker 基础设施配置
+├── data/              # CSV 数据文件
+├── doc/               # 项目文档
+└── docker-compose.yml
 ```
 
 ## 技术栈
 
-| 类别 | 技术选型 | 说明 |
-|------|----------|------|
-| 框架 | Vue 3.4+ | Composition API |
-| 构建 | Vite 5.x | 快速开发体验 |
-| UI库 | Element Plus + Naive UI | 混合使用组件库 |
-| 图表 | ECharts 5.x | 数据可视化 |
-| 地图 | ECharts Map | 中国地图 |
-| 状态 | Pinia | 状态管理 |
-| 路由 | Vue Router 4 | SPA路由 |
-| CSS | UnoCSS + SCSS | 原子化CSS |
-| 语言 | TypeScript | 类型安全 |
+| 模块 | 技术 |
+|------|------|
+| 前端 | Vue 3, TypeScript, Vite, Element Plus |
+| 后端 | Spring Boot 3.3.6, JDK 17, Spring Data JPA |
+| 数据服务 | Python 3.11（脚本：HBase 导入 / Kafka 实时模拟） |
+| 流处理 | Apache Flink 1.20 |
+| 数据库 | MySQL 8, Redis 7 |
+| 消息队列 | Apache Kafka |
+| 大数据存储 | HBase |
 
-## 设计规范
+## 文档
 
-### 大屏主题 (Dark Tech)
+- [API 接口文档](doc/API接口文档.md)
+- [数据库设计](doc/数据库设计总表.md)
+- [系统设计](doc/设计文档.md)
+- [需求文档](doc/需求文档.md)
 
-- **背景色**：深色渐变 `#0a1628` → `#0d1e36`
-- **卡片**：半透明玻璃态 `rgba(6, 30, 61, 0.8)`
-- **边框**：发光效果 `rgba(30, 144, 255, 0.3)`
-- **主色**：青蓝 `#00d4ff`
-- **成功色**：绿色 `#00ff88`
-- **警告色**：橙色 `#ffaa00`
-- **危险色**：红色 `#ff6b35`
+## 默认账户
 
-### 字体规范
-
-- **数字**：DIN Alternate（数据展示）
-- **中文**：思源黑体 / 苹方 / 微软雅黑
-
-## 开发规范
-
-1. **组件命名**：使用 PascalCase，如 `KPIStatCard.vue`
-2. **文件命名**：使用 camelCase，如 `useDashboardData.ts`
-3. **CSS 类名**：使用 BEM 命名规范
-4. **代码风格**：遵循 ESLint + Prettier 配置
-
-## 后续规划
-
-- [ ] 后端 API 服务开发
-- [ ] 数据库设计与实现
-- [ ] Flink 实时处理作业
-- [ ] 套牌车检测算法
-- [ ] 车流预测模型
-- [ ] Docker 部署方案
-
-## 参考资料
-
-- [Vue 3 文档](https://cn.vuejs.org/)
-- [ECharts 文档](https://echarts.apache.org/zh/)
-- [Naive UI 文档](https://www.naiveui.com/)
-- [需求文档](./需求文档.md)
-- [实施方案](./实施方案.md)
+- 用户名: `admin`
+- 密码: `admin123`
 
 ## License
 

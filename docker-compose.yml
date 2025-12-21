@@ -14,7 +14,7 @@ services:
       - zookeeper-data:/data
       - zookeeper-datalog:/datalog
     healthcheck:
-      test: ["CMD-SHELL", "echo ruok | nc 127.0.0.1 2181 | grep -q imok"]
+      test: [ "CMD-SHELL", "echo ruok | nc 127.0.0.1 2181 | grep -q imok" ]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -37,11 +37,7 @@ services:
       - kafka-data:/var/lib/kafka
     restart: unless-stopped
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server 127.0.0.1:9092 >/dev/null 2>&1",
-        ]
+      test: [ "CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server 127.0.0.1:9092 >/dev/null 2>&1" ]
       interval: 10s
       timeout: 10s
       retries: 18
@@ -52,30 +48,24 @@ services:
       args:
         KAFKA_VERSION: "3.8.1"
         SCALA_VERSION: "2.13"
+    entrypoint: [ "bash", "-lc" ]
+    user: "0:0"
     depends_on:
       kafka:
         condition: service_healthy
     command:
-      [
-        "bash",
-        "-lc",
-        "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic etc-pass-records --partitions 6 --replication-factor 1 && \
-         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic etc.pass.clean --partitions 6 --replication-factor 1 && \
-         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic etc.alerts.clone_plate --partitions 3 --replication-factor 1 && \
-         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic etc.alerts.pressure --partitions 3 --replication-factor 1 && \
-         echo 'kafka topics ensured.'",
-      ]
+      - "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic etc-pass-records --partitions 6 --replication-factor 1 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic etc.pass.clean --partitions 6 --replication-factor 1 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic etc.alerts.clone_plate --partitions 3 --replication-factor 1 && /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic etc.alerts.pressure --partitions 3 --replication-factor 1 && echo 'kafka topics ensured.'"
     restart: "no"
 
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
-    command: ["redis-server", "--appendonly", "yes"]
+    command: [ "redis-server", "--appendonly", "yes" ]
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -91,7 +81,7 @@ services:
       - mysql0-data:/var/lib/mysql
       - ./infra/mysql/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      test: [ "CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent" ]
       interval: 10s
       timeout: 5s
       retries: 18
@@ -107,7 +97,7 @@ services:
       - mysql1-data:/var/lib/mysql
       - ./infra/mysql/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      test: [ "CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent" ]
       interval: 10s
       timeout: 5s
       retries: 18
@@ -127,7 +117,7 @@ services:
     environment:
       JAVA_OPTS: "-Xms512m -Xmx1024m"
     healthcheck:
-      test: ["CMD-SHELL", "bash -lc 'exec 3<>/dev/tcp/127.0.0.1/3307'"]
+      test: [ "CMD-SHELL", "bash -lc 'exec 3<>/dev/tcp/127.0.0.1/3307'" ]
       interval: 10s
       timeout: 5s
       retries: 18
@@ -154,6 +144,8 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
+    volumes:
+      - ./flink-jobs/target:/opt/flink/jobs:ro
 
   flink-taskmanager:
     build:
@@ -178,18 +170,17 @@ services:
       context: ./infra/hbase
       args:
         HBASE_VERSION: "2.6.1"
-    profiles: ["hbase"]
     depends_on:
       zookeeper:
         condition: service_healthy
     ports:
       - "16010:16010" # HBase Master UI
       - "16030:16030" # RegionServer UI
-      - "9090:9090"   # Thrift Server
+      - "9090:9090" # Thrift Server
     volumes:
       - hbase-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:16010/master-status >/dev/null 2>&1"]
+      test: [ "CMD-SHELL", "curl -fsS http://127.0.0.1:16010/master-status >/dev/null 2>&1" ]
       interval: 15s
       timeout: 10s
       retries: 20
@@ -199,11 +190,10 @@ services:
       context: ./infra/hbase
       args:
         HBASE_VERSION: "2.6.1"
-    profiles: ["hbase"]
     depends_on:
       hbase:
         condition: service_healthy
-    command: ["bash", "-lc", "/opt/hbase/bin/hbase shell /init/create-tables.hbase"]
+    command: [ "shell", "/init/create-tables.hbase" ]
     restart: "no"
 
   # ==================== Presto/Trino - SQL 查询引擎 ====================
@@ -212,7 +202,7 @@ services:
     container_name: trino
     hostname: trino
     ports:
-      - "8090:8080"  # Trino Web UI & Query Endpoint
+      - "8090:8080" # Trino Web UI & Query Endpoint
     volumes:
       - ./infra/trino/etc/config.properties:/etc/trino/config.properties:ro
       - ./infra/trino/etc/node.properties:/etc/trino/node.properties:ro
@@ -223,7 +213,7 @@ services:
       mysql0:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/v1/status | grep -q ACTIVE"]
+      test: [ "CMD-SHELL", "curl -fsS http://localhost:8080/v1/status | grep -q ACTIVE" ]
       interval: 10s
       timeout: 5s
       retries: 18
@@ -233,7 +223,7 @@ services:
       context: ./infra/spark
       args:
         SPARK_VERSION: "3.5.4"
-    profiles: ["spark"]
+    profiles: [ "spark" ]
     environment:
       SPARK_MODE: master
     ports:
@@ -247,7 +237,7 @@ services:
       context: ./infra/spark
       args:
         SPARK_VERSION: "3.5.4"
-    profiles: ["spark"]
+    profiles: [ "spark" ]
     environment:
       SPARK_MODE: worker
       SPARK_MASTER_URL: spark://spark-master:7077
@@ -257,6 +247,54 @@ services:
       - "8082:8081" # Spark worker UI
     volumes:
       - spark-data:/data
+
+  # ==================== 后端 API 服务 ====================
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8080:8080"
+    environment:
+      MYSQL_HOST: shardingsphere
+      MYSQL_PORT: 3307
+      MYSQL_USER: root
+      MYSQL_PASSWORD: "${MYSQL_ROOT_PASSWORD:-root}"
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      shardingsphere:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  # ==================== Python 数据服务 ====================
+  data-service:
+    build:
+      context: ./data-service
+    environment:
+      MYSQL_HOST: shardingsphere
+      MYSQL_PORT: 3307
+      MYSQL_USER: root
+      MYSQL_PASSWORD: "${MYSQL_ROOT_PASSWORD:-root}"
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      DATA_DIR: /data
+      BACKEND_TIME_API: http://backend:8080/api/time
+    volumes:
+      - ./data/expanded:/data:ro
+    depends_on:
+      mysql0:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   zookeeper-data:

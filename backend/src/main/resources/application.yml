@@ -1,74 +1,76 @@
-server:
-  port: 8080
-  address: 0.0.0.0
-  servlet:
-    encoding:
-      charset: UTF-8
-      enabled: true
-      force: true
-
 spring:
   application:
     name: etc-backend
-  
-  # MySQL 数据源配置 (通过 ShardingSphere 代理连接分片表)
+
+  # 数据源配置
   datasource:
-    url: jdbc:mysql://localhost:3307/etc?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=utf8&useUnicode=true
-    username: root
-    password: root
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3307}/etc?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=UTF-8&characterSetResults=UTF-8&connectionCollation=utf8mb4_unicode_ci
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
-      minimum-idle: 5
       maximum-pool-size: 20
-      idle-timeout: 30000
+      minimum-idle: 5
       connection-timeout: 30000
-      max-lifetime: 1800000
-      connection-init-sql: SET NAMES utf8mb4
-  
-  # Redis 配置
-  data:
-    redis:
-      host: localhost
-      port: 6379
-      password:
-      database: 0
-      timeout: 5000ms
-      lettuce:
-        pool:
-          max-active: 8
-          max-idle: 8
-          min-idle: 2
-          max-wait: -1ms
 
   # JPA 配置
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: true
+      ddl-auto: none
+    show-sql: false
     properties:
       hibernate:
-        format_sql: true
         dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
 
+  # Redis 配置
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 5000ms
+
+# 服务器配置
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+# Actuator 配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+# JWT 配置
+jwt:
+  secret: ${JWT_SECRET:etc-platform-secret-key-should-be-at-least-256-bits}
+  expiration: 86400000  # 24小时
+
+# 日志配置
 logging:
   level:
-    com.etc.platform: debug
-    org.springframework.data: debug
+    root: INFO
+    com.etc: DEBUG
+    org.springframework.security: DEBUG
 
-# HBase 配置 (连接 Docker 集群)
-hbase:
-  enabled: true
-  zookeeper:
-    quorum: localhost
-    clientPort: 2181
-  thrift:
-    host: localhost
-    port: 9090
+# OpenAPI 配置
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /docs
 
-# Kafka 配置
-kafka:
-  bootstrap-servers: localhost:9092
-  topics:
-    pass-record: etc-pass-record
-    alert: etc-alert
-    flow-stats: etc-flow-stats
+etc:
+  retention:
+    days: 7
+    cleanup-ms: 600000
+    batch-size: 10000
+    max-batches: 50
+  stats:
+    refresh-ms: 30000
+    ttl-seconds: 60

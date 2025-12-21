@@ -4,9 +4,10 @@ FROM docker.io/library/eclipse-temurin:17-jre-jammy
 
 ARG HBASE_VERSION
 
-# 使用阿里云镜像源解决网络问题
+# 使用阿里云镜像源解决网络问题（支持 x86_64 和 ARM64 架构）
 RUN sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list \
   && sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list \
+  && sed -i 's/ports.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list \
   && apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl bash procps netcat-openbsd \
   && rm -rf /var/lib/apt/lists/*
@@ -17,11 +18,11 @@ RUN set -eux; \
   out="hbase.tgz"; \
   i=0; \
   while [ "$i" -lt 12 ]; do \
-    if curl -fL --http1.1 --connect-timeout 20 --max-time 2400 -C - -o "${out}" "${url}"; then \
-      break; \
-    fi; \
-    i=$((i+1)); \
-    sleep 2; \
+  if curl -fL --http1.1 --connect-timeout 20 --max-time 2400 -C - -o "${out}" "${url}"; then \
+  break; \
+  fi; \
+  i=$((i+1)); \
+  sleep 2; \
   done; \
   test -s "${out}"; \
   tar -xzf "${out}"; \
