@@ -31,6 +31,12 @@ public class RealtimeController {
         return ResponseEntity.ok(ApiResponse.success(realtimeService.getDailyStats()));
     }
 
+    @GetMapping("/vehicle-source")
+    @Operation(summary = "获取车辆来源统计（本地/外地）")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getVehicleSource() {
+        return ResponseEntity.ok(ApiResponse.success(realtimeService.getVehicleSourceStats()));
+    }
+
     @GetMapping("/clone-plates")
     @Operation(summary = "获取套牌车检测列表")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getClonePlates(

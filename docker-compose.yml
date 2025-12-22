@@ -193,7 +193,8 @@ services:
     depends_on:
       hbase:
         condition: service_healthy
-    command: [ "shell", "/init/create-tables.hbase" ]
+    entrypoint: [ "bash", "-c" ]
+    command: [ "sed -i 's/\\r$//' /init/init-tables.sh && chmod +x /init/init-tables.sh && /init/init-tables.sh" ]
     restart: "no"
 
   # ==================== Presto/Trino - SQL 查询引擎 ====================

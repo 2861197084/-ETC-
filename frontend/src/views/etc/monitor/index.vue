@@ -140,7 +140,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { Sunny, Van, Money, Odometer, Connection, Warning, Refresh } from '@element-plus/icons-vue'
 import { XuzhouTrafficMap, BloomStats, RegionRank, AlertTicker, ClonePlateAlert } from '@/components/business/etc'
-import { getDailyStats, getViolations, getClonePlates } from '@/api/admin/realtime'
+import { getDailyStats, getViolations, getClonePlates, getVehicleSourceStats } from '@/api/admin/realtime'
 import { getCheckpoints } from '@/api/admin/map'
 import { useSimulatedClock } from '@/hooks/core/useSimulatedClock'
 
@@ -230,15 +230,26 @@ const loadRegionRank = async () => {
         .sort((a, b) => b.count - a.count)
         .slice(0, 10)
       console.log('📊 区域排名:', regionRankData.value)
-      // 计算本地/外地车辆（本地按70%估算）
-      const total = res.data.reduce((sum: number, cp: any) => sum + (cp.currentFlow || 0), 0)
-      bloomData.value = {
-        local: Math.floor(total * 0.7),
-        foreign: Math.floor(total * 0.3)
-      }
     }
   } catch (e) {
     console.error('加载区域排名失败:', e)
+  }
+}
+
+// 加载车辆来源统计（本地/外地）
+const loadVehicleSource = async () => {
+  try {
+    console.log('🔄 开始加载车辆来源统计...')
+    const res = await getVehicleSourceStats()
+    console.log('📊 车辆来源响应:', res)
+    if (res.code === 200 && res.data) {
+      bloomData.value = {
+        local: res.data.local || 0,
+        foreign: res.data.foreign || 0
+      }
+    }
+  } catch (e) {
+    console.error('加载车辆来源统计失败:', e)
   }
 }
 
@@ -325,6 +336,7 @@ const loadAllData = async () => {
   await Promise.all([
     loadDailyStats(),
     loadRegionRank(),
+    loadVehicleSource(),
     loadAlerts()
   ])
 }

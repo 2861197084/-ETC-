@@ -67,6 +67,13 @@ export function getDailyStats() {
 }
 
 /**
+ * 获取车辆来源统计（本地/外地）
+ */
+export function getVehicleSourceStats() {
+  return http.get<{ local: number; foreign: number; total: number; localRate: number; foreignRate: number }>('/admin/realtime/vehicle-source')
+}
+
+/**
  * 获取实时流量数据（WebSocket 连接前获取初始数据）
  */
 export function getRealtimeFlow() {

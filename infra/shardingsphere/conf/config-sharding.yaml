@@ -44,7 +44,7 @@ rules:
       pass_record_tbl_inline:
         type: INLINE
         props:
-          algorithm-expression: pass_record_${(plate_hash / 2) % 2}
+          algorithm-expression: pass_record_${plate_hash.intdiv(2) % 2}
     keyGenerators:
       snowflake:
         type: SNOWFLAKE

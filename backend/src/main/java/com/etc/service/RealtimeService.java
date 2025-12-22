@@ -71,6 +71,33 @@ public class RealtimeService {
     }
 
     /**
+     * 获取车辆来源统计（本地/外地）
+     * 本地车辆：苏C开头（徐州）
+     * 外地车辆：非苏C开头
+     */
+    public Map<String, Object> getVehicleSourceStats() {
+        Map<String, Object> stats = new HashMap<>();
+
+        LocalDateTime simNow = timeService.getSimulatedTime();
+        LocalDateTime dayStart = simNow.toLocalDate().atStartOfDay();
+
+        Long localCount = passRecordRepository.countLocalVehicles(dayStart, simNow);
+        Long foreignCount = passRecordRepository.countForeignVehicles(dayStart, simNow);
+
+        long local = localCount != null ? localCount : 0L;
+        long foreign = foreignCount != null ? foreignCount : 0L;
+        long total = local + foreign;
+
+        stats.put("local", local);
+        stats.put("foreign", foreign);
+        stats.put("total", total);
+        stats.put("localRate", total > 0 ? Math.round(local * 100.0 / total) : 0);
+        stats.put("foreignRate", total > 0 ? Math.round(foreign * 100.0 / total) : 0);
+
+        return stats;
+    }
+
+    /**
      * 获取套牌车检测列表
      */
     public Page<ClonePlateDetection> getClonePlates(String status, String plateNumber, LocalDateTime startTime, LocalDateTime endTime, int page, int size) {

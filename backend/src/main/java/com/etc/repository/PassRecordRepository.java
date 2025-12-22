@@ -50,4 +50,16 @@ public interface PassRecordRepository extends JpaRepository<PassRecord, Long> {
 
     @Query("SELECT p.checkpointId, COUNT(p) FROM PassRecord p WHERE p.gcsj >= :start AND p.gcsj < :end GROUP BY p.checkpointId")
     List<Object[]> countByCheckpointInRange(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    /**
+     * 统计本地车辆（苏C开头）
+     */
+    @Query("SELECT COUNT(p) FROM PassRecord p WHERE p.gcsj >= :start AND p.gcsj < :end AND p.hp LIKE '苏C%'")
+    Long countLocalVehicles(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    /**
+     * 统计外地车辆（非苏C开头）
+     */
+    @Query("SELECT COUNT(p) FROM PassRecord p WHERE p.gcsj >= :start AND p.gcsj < :end AND p.hp NOT LIKE '苏C%'")
+    Long countForeignVehicles(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 }
