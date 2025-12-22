@@ -14,9 +14,9 @@ DASHSCOPE_MODEL = os.getenv("DASHSCOPE_MODEL", "qwen-plus")
 # 后端 API 地址
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8080")
 
-# TTS 配置
-TTS_MODEL = os.getenv("TTS_MODEL", "cosyvoice-v1")
-TTS_VOICE = os.getenv("TTS_VOICE", "longxiaochun")
+# TTS 配置 - 使用 sambert 模型
+TTS_MODEL = os.getenv("TTS_MODEL", "sambert-zhichu-v1")
+TTS_VOICE = os.getenv("TTS_VOICE", "zhichu")
 
 # 服务配置
 HOST = os.getenv("HOST", "0.0.0.0")

@@ -3,7 +3,7 @@
     <div class="page-header">
       <div class="title-wrap">
         <h2 class="page-title">预测分析</h2>
-        <p class="page-desc">基于 Time‑MoE 的卡口×方向 5 分钟粒度预测（未来 12 点）</p>
+        <p class="page-desc">基于 Time‑MoE 的卡口×方向 5 分钟粒度预测（未来 1h）</p>
       </div>
 
       <div class="header-actions">
@@ -40,7 +40,7 @@
 
     <div class="metrics-grid">
       <el-card class="metric-card" shadow="never">
-        <div class="metric-title">未来 1 小时总量（12 点求和）</div>
+        <div class="metric-title">未来 1 小时总量</div>
         <div class="metric-value">{{ sumValue.toLocaleString() }}</div>
         <div class="metric-sub">用于快速评估整体压力（展示用）</div>
       </el-card>
@@ -54,13 +54,12 @@
       <el-card class="metric-card" shadow="never">
         <div class="metric-title">均值</div>
         <div class="metric-value">{{ avgValue.toLocaleString() }}</div>
-        <div class="metric-sub">12 点均值（5min 粒度）</div>
+        <div class="metric-sub">12 点均值</div>
       </el-card>
 
       <el-card class="metric-card" shadow="never">
         <div class="metric-title">置信提示</div>
         <div class="metric-value">{{ healthLabel }}</div>
-        <div class="metric-sub">根据预测波动幅度给出提示（展示用）</div>
       </el-card>
     </div>
 
@@ -68,7 +67,6 @@
       <el-card class="chart-card" shadow="never">
         <div class="chart-header">
           <div class="chart-title">未来 12 点预测曲线（5min × 12）</div>
-          <div class="chart-sub">虚线表示预测；用于前端绘图</div>
         </div>
         <div class="chart-body">
           <div ref="lineChartRef" class="chart" />
@@ -78,7 +76,6 @@
       <el-card class="chart-card" shadow="never">
         <div class="chart-header">
           <div class="chart-title">分段柱状（高亮峰值）</div>
-          <div class="chart-sub">用于更直观地观察短时波动</div>
         </div>
         <div class="chart-body">
           <div ref="barChartRef" class="chart" />
@@ -133,14 +130,16 @@ const peak = computed(() => {
 const peakValue = computed(() => (peak.value.i >= 0 ? peak.value.v : 0))
 const peakTime = computed(() => (peak.value.i >= 0 ? times.value[peak.value.i] : ''))
 
-const healthLabel = computed(() => {
-  if (values.value.length < 2) return '--'
-  const diffs = values.value.slice(1).map((v, i) => Math.abs(v - values.value[i]))
-  const mean = diffs.reduce((a, b) => a + b, 0) / diffs.length
-  if (mean > 120) return '波动偏大'
-  if (mean > 60) return '波动正常'
-  return '较平稳'
-})
+const healthLabel = ref('--')
+
+function pickHealthLabel() {
+  // 需求：每次预测更新前端时，在 平稳 / 较平稳 / 波动 三者中随机选；
+  // 且 平稳、较平稳 概率更大。
+  const r = Math.random()
+  if (r < 0.45) return '平稳'
+  if (r < 0.85) return '较平稳'
+  return '波动'
+}
 
 function buildLineOption() {
   const x = times.value.map((t) => t.slice(11, 16))
@@ -149,6 +148,8 @@ function buildLineOption() {
   const { themeColor } = useChartOps()
 
   return {
+    // 不展示任何“暂无数据”等标题占位（即使历史 option 里有 title，也通过 show=false 覆盖掉）
+    title: { show: false },
     tooltip: { trigger: 'axis', ...getTooltipStyle() },
     legend: { data: ['预测'], ...getLegendStyle() },
     grid: { left: 40, right: 24, top: 40, bottom: 32, containLabel: true },
@@ -201,6 +202,8 @@ function buildBarOption() {
   const { themeColor } = useChartOps()
 
   return {
+    // 不展示任何“暂无数据”等标题占位
+    title: { show: false },
     tooltip: { trigger: 'axis', ...getTooltipStyle() },
     grid: { left: 40, right: 24, top: 24, bottom: 32, containLabel: true },
     xAxis: {
@@ -284,6 +287,7 @@ async function triggerOnce() {
           updatedAt.value = d.updatedAt || ''
           times.value = d.times || []
           values.value = (d.values || []).map((v) => Math.max(0, Math.round(v)))
+          healthLabel.value = pickHealthLabel()
           renderCharts()
           if (!d.pending) return
         }
@@ -302,14 +306,6 @@ async function triggerOnce() {
 }
 
 onMounted(() => {
-  // 初始化空图表（避免首次渲染闪烁）
-  line.initChart({
-    title: { text: '暂无数据', left: 'center', top: 'middle' }
-  } as any)
-  bar.initChart({
-    title: { text: '暂无数据', left: 'center', top: 'middle' }
-  } as any)
-
   triggerOnce()
   minuteTimer = window.setInterval(() => {
     if (!autoRefresh.value) return

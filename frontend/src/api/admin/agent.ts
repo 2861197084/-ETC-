@@ -27,9 +27,8 @@ export async function sendMessageStream(
   onComplete: () => void,
   onError: (error: Error) => void
 ): Promise<() => void> {
-  // 开发环境使用相对路径（通过 Vite 代理），生产环境使用配置的 API URL
-  const baseUrl = import.meta.env.VITE_API_URL === '/' ? '' : (import.meta.env.VITE_API_URL || '')
-  const url = `${baseUrl}/api/agent/chat/stream`
+  // 使用相对路径，通过 Vite 代理转发
+  const url = '/api/agent/chat/stream'
   
   const controller = new AbortController()
   
@@ -38,8 +37,7 @@ export async function sendMessageStream(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'text/event-stream',
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        'Accept': 'text/event-stream'
       },
       body: JSON.stringify({ sessionId, message }),
       signal: controller.signal
@@ -114,15 +112,14 @@ export function getSessionHistory(sessionId: string) {
  * 返回音频 Blob
  */
 export async function synthesizeSpeech(text: string): Promise<Blob | null> {
-  const baseUrl = import.meta.env.VITE_API_URL || ''
-  const url = `${baseUrl}/api/agent/tts`
+  // 使用相对路径，通过 Vite 代理转发
+  const url = '/api/agent/tts'
   
   try {
     const response = await fetch(url, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({ text })
     })

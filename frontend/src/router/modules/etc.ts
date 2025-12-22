@@ -32,6 +32,8 @@ export const etcRoutes: AppRouteRecord = {
       meta: {
         title: '实时监控',
         icon: 'ri:pulse-line',
+        // 暂时从左侧菜单移除（路由仍可通过直达 URL 访问）
+        isHide: true,
         keepAlive: false
       }
     },
