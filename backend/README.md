@@ -51,10 +51,19 @@ docker compose up -d backend
 | 统计 | `/api/progressive/count/global` | 全局统计（Redis/MySQL） |
 | 地图 | `/admin/map/checkpoints` | 获取卡口列表 |
 | 实时 | `/admin/realtime/daily-stats` | 今日统计 |
-| 实时 | `/admin/realtime/clone-plates` | 套牌检测 |
+| 实时 | `/admin/realtime/clone-plates` | 套牌检测（支持筛选） |
 | 实时 | `/admin/realtime/violations` | 违规列表 |
 | 查询 | `/admin/query/records` | 通行记录查询 |
 | 查询 | `/admin/query/text2sql` | 自然语言查询 |
+
+### 套牌检测查询参数
+
+`GET /admin/realtime/clone-plates`
+
+- `status`（可选）：`pending` / `confirmed` / `dismissed`
+- `plateNumber`（可选）：模糊匹配
+- `startTime`/`endTime`（可选）：ISO 本地时间，如 `2024-01-01T00:50:00`（按 `time_2` 过滤）
+- `page`/`pageSize`：分页
 
 ## 配置说明
 

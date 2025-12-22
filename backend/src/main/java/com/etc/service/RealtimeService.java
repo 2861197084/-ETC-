@@ -54,8 +54,9 @@ public class RealtimeService {
         }
         stats.put("totalFlow", totalFlow);
 
-        Long violationCount = violationRepository.countByCreateTimeRange(dayStart, simNow);
-        Long cloneCount = clonePlateRepository.countByCreateTimeRange(dayStart, simNow);
+        // Use simulated timeline fields (violation_time / time_2) rather than ingestion time.
+        Long violationCount = violationRepository.countByViolationTimeRange(dayStart, simNow);
+        Long cloneCount = clonePlateRepository.countByTime2Range(dayStart, simNow);
         long alertCount =
                 (violationCount != null ? violationCount : 0L) + (cloneCount != null ? cloneCount : 0L);
         stats.put("alertCount", alertCount);
@@ -72,14 +73,12 @@ public class RealtimeService {
     /**
      * 获取套牌车检测列表
      */
-    public Page<ClonePlateDetection> getClonePlates(String status, int page, int size) {
+    public Page<ClonePlateDetection> getClonePlates(String status, String plateNumber, LocalDateTime startTime, LocalDateTime endTime, int page, int size) {
         int pageIndex = Math.max(page - 1, 0);
-        Pageable pageable = PageRequest.of(pageIndex, size, Sort.by(Sort.Direction.DESC, "createTime"));
+        // Sort by the simulated event time.
+        Pageable pageable = PageRequest.of(pageIndex, size, Sort.by(Sort.Direction.DESC, "time2"));
         String normalizedStatus = normalizeClonePlateStatus(status);
-        if (normalizedStatus != null && !normalizedStatus.isEmpty()) {
-            return clonePlateRepository.findByStatus(normalizedStatus, pageable);
-        }
-        return clonePlateRepository.findAll(pageable);
+        return clonePlateRepository.search(normalizedStatus, plateNumber, startTime, endTime, pageable);
     }
 
     /**
@@ -87,7 +86,7 @@ public class RealtimeService {
      */
     public Page<Violation> getViolations(String type, String status, int page, int size) {
         int pageIndex = Math.max(page - 1, 0);
-        Pageable pageable = PageRequest.of(pageIndex, size, Sort.by(Sort.Direction.DESC, "createTime"));
+        Pageable pageable = PageRequest.of(pageIndex, size, Sort.by(Sort.Direction.DESC, "violationTime"));
         if (type != null && !type.isEmpty()) {
             return violationRepository.findByViolationType(type, pageable);
         }
@@ -250,7 +249,7 @@ public class RealtimeService {
 
         if (!"clone".equals(t)) {
             List<Violation> violations = violationRepository
-                    .findAll(PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "createTime")))
+                    .findAll(PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "violationTime")))
                     .getContent();
 	            for (Violation v : violations) {
 	                Checkpoint cp = v.getCheckpointId() != null ? checkpointByCode.get(v.getCheckpointId()) : null;
@@ -274,7 +273,7 @@ public class RealtimeService {
 
         if (!"violation".equals(t)) {
             List<ClonePlateDetection> clones = clonePlateRepository
-                    .findAll(PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "createTime")))
+                    .findAll(PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "time2")))
                     .getContent();
 	            for (ClonePlateDetection c : clones) {
 	                String checkpointId = c.getCheckpointId2() != null ? c.getCheckpointId2() : c.getCheckpointId1();
@@ -289,7 +288,7 @@ public class RealtimeService {
 	                event.put("checkpointName", cp != null ? CheckpointCatalog.displayName(cp.getCode(), cp.getName()) : checkpointId);
 	                event.put("longitude", cp != null && cp.getLongitude() != null ? cp.getLongitude().doubleValue() : null);
 	                event.put("latitude", cp != null && cp.getLatitude() != null ? cp.getLatitude().doubleValue() : null);
-	                event.put("time", c.getCreateTime());
+	                event.put("time", c.getTime2() != null ? c.getTime2() : c.getCreateTime());
 	                event.put("status", c.getStatus());
 	                event.put("confidence", normalizeConfidence(c.getConfidenceScore()));
 	                events.add(event);
@@ -326,7 +325,7 @@ public class RealtimeService {
                             String cp1Name = cp1 != null ? checkpointNameByCode.getOrDefault(cp1, cp1) : null;
                             String cp2Name = cp2 != null ? checkpointNameByCode.getOrDefault(cp2, cp2) : null;
 
-                            LocalDateTime detectTime = e.getCreateTime();
+                            LocalDateTime detectTime = e.getTime2() != null ? e.getTime2() : e.getCreateTime();
                             double confidence = normalizeConfidence(e.getConfidenceScore());
 
                             Map<String, Object> map = new java.util.HashMap<>();

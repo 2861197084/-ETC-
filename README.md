@@ -22,7 +22,7 @@
 
 ## 快速开始
 
-### 1 数据导入与实时模拟
+### 1. 编译 Flink 作业 JAR
 
 > 历史数据仅入 HBase；实时数据通过 Kafka→Flink 落 MySQL（热数据）并写入 HBase（归档）。
 
@@ -38,17 +38,18 @@ docker run --rm -v "$PWD":/workspace -w /workspace maven:3.9-eclipse-temurin-17 
 
 # 确认 JobManager 容器能看到 JAR（docker-compose.yml 会挂载 ./flink-jobs/target → /opt/flink/jobs）
 docker compose exec flink-jobmanager ls -la /opt/flink/jobs
+```
 
-### 2 启动 Docker 服务
+### 2. 启动 Docker 服务
 
 ```bash
 # 启动所有服务（首次需要 --build）
 docker compose up -d --build
-```
 
 # 提交作业（-d 表示后台运行；JAR 文件名以 /opt/flink/jobs 实际输出为准）
 docker compose exec flink-jobmanager flink run -d -c com.etc.flink.MySqlStorageJob /opt/flink/jobs/etc-flink-jobs-1.0.0.jar
 docker compose exec flink-jobmanager flink run -d -c com.etc.flink.HBaseStorageJob /opt/flink/jobs/etc-flink-jobs-1.0.0.jar
+docker compose exec flink-jobmanager flink run -d -c com.etc.flink.ClonePlateDetectorJob /opt/flink/jobs/etc-flink-jobs-1.0.0.jar
 
 # 2) 导入历史数据（2023-12 → HBase，同时写入 Redis 历史统计；一次性容器用 --rm 自动清理）
 docker compose run --rm data-service python -m scripts.import_to_hbase
@@ -59,7 +60,7 @@ docker compose run --rm data-service python -m scripts.realtime_simulator
 
 > 若 `/opt/flink/jobs` 为空：通常是先启动了 Flink 容器、后编译了 `flink-jobs/`，可执行 `docker compose restart flink-jobmanager flink-taskmanager` 后再检查；若仍为空，再检查 Docker Desktop 对项目目录的共享/权限设置。
 
-### 2. 启动前端
+### 3. 启动前端
 
 ```bash
 cd frontend
@@ -67,7 +68,7 @@ pnpm install
 pnpm dev
 ```
 
-### 3. 访问地址
+### 4. 访问地址
 
 | 服务 | 地址 |
 |------|------|
@@ -75,6 +76,19 @@ pnpm dev
 | 后端 API | http://localhost:8080 |
 | API 文档 | http://localhost:8080/docs |
 | Flink UI | http://localhost:8081 |
+
+## 套牌检测测试（推荐）
+
+确保 Flink 已提交 `ClonePlateDetectorJob`，然后注入两条“同车牌、不同卡口、短时间差”的过车记录：
+
+```bash
+docker compose run --rm data-service python -m scripts.inject_clone_plate \
+  --plate TEST-CLONE-002 --cp1 CP002 --cp2 CP009 --auto-time --verify
+```
+
+验证：
+- 后端接口：`GET http://localhost:8080/admin/realtime/clone-plates?plateNumber=TEST-CLONE-002`
+- 前端页面：`实时监控/套牌车检测` 或 `交互式查询/套牌嫌疑`
 
 ## 时间模拟系统
 

@@ -20,6 +20,6 @@ public interface ViolationRepository extends JpaRepository<Violation, Long> {
     @Query("SELECT COUNT(v) FROM Violation v WHERE DATE(v.createTime) = CURRENT_DATE")
     Long countToday();
 
-    @Query("SELECT COUNT(v) FROM Violation v WHERE v.createTime >= :start AND v.createTime < :end")
-    Long countByCreateTimeRange(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+    @Query("SELECT COUNT(v) FROM Violation v WHERE v.violationTime >= :start AND v.violationTime < :end")
+    Long countByViolationTimeRange(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 }

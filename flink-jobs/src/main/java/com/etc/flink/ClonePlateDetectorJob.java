@@ -139,6 +139,8 @@ public class ClonePlateDetectorJob {
 
         // 保存上一条记录
         private transient ValueState<PassRecord> lastRecordState;
+        // 保存清理定时器时间戳，避免旧定时器误清理新状态
+        private transient ValueState<Long> cleanupTimerState;
 
         @Override
         public void open(Configuration parameters) {
@@ -146,6 +148,11 @@ public class ClonePlateDetectorJob {
                     "lastRecord",
                     TypeInformation.of(PassRecord.class));
             lastRecordState = getRuntimeContext().getState(descriptor);
+
+            ValueStateDescriptor<Long> timerDesc = new ValueStateDescriptor<>(
+                    "cleanupTimer",
+                    TypeInformation.of(Long.class));
+            cleanupTimerState = getRuntimeContext().getState(timerDesc);
         }
 
         @Override
@@ -190,13 +197,26 @@ public class ClonePlateDetectorJob {
             lastRecordState.update(current);
 
             // 设置清理定时器（5分钟后清理状态）
-            ctx.timerService().registerProcessingTimeTimer(
-                    ctx.timerService().currentProcessingTime() + CLONE_DETECTION_WINDOW_SECONDS * 1000);
+            Long prevTimer = cleanupTimerState.value();
+            if (prevTimer != null && prevTimer > 0) {
+                ctx.timerService().deleteProcessingTimeTimer(prevTimer);
+            }
+            long nextTimer = ctx.timerService().currentProcessingTime() + CLONE_DETECTION_WINDOW_SECONDS * 1000;
+            cleanupTimerState.update(nextTimer);
+            ctx.timerService().registerProcessingTimeTimer(nextTimer);
         }
 
         @Override
         public void onTimer(long timestamp, OnTimerContext ctx, Collector<ClonePlateAlert> out) {
-            // 定时器触发时可以清理过期状态（可选）
+            try {
+                Long expected = cleanupTimerState.value();
+                if (expected != null && expected == timestamp) {
+                    lastRecordState.clear();
+                    cleanupTimerState.clear();
+                }
+            } catch (Exception ignored) {
+                // ignore
+            }
         }
     }
 }

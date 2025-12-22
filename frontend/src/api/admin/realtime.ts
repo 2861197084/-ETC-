@@ -7,7 +7,14 @@ import type { ClonePlateDetection, Violation, DailyStats } from '@/types/traffic
 /**
  * 获取套牌车检测数据
  */
-export function getClonePlates(params?: { status?: string; page?: number; pageSize?: number }) {
+export function getClonePlates(params?: {
+  status?: string
+  plateNumber?: string
+  startTime?: string
+  endTime?: string
+  page?: number
+  pageSize?: number
+}) {
   return http.get<{
     list: ClonePlateDetection[]
     total: number

@@ -138,7 +138,7 @@ services:
         rest.address: flink-jobmanager
         rest.port: 8081
         blob.server.port: 6124
-        taskmanager.numberOfTaskSlots: 2
+        taskmanager.numberOfTaskSlots: 3
         parallelism.default: 1
         jobmanager.memory.process.size: 768m
     depends_on:
@@ -159,7 +159,7 @@ services:
         jobmanager.rpc.address: flink-jobmanager
         jobmanager.rpc.port: 6123
         blob.server.port: 6124
-        taskmanager.numberOfTaskSlots: 2
+        taskmanager.numberOfTaskSlots: 3
         parallelism.default: 1
         taskmanager.memory.process.size: 1024m
     depends_on:
@@ -255,6 +255,8 @@ services:
     ports:
       - "8080:8080"
     environment:
+      # Ensure MySQL DATETIME values are rendered consistently with the demo's simulated timezone.
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Shanghai"
       MYSQL_HOST: shardingsphere
       MYSQL_PORT: 3307
       MYSQL_USER: root

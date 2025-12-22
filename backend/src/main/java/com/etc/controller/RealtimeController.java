@@ -10,10 +10,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.format.annotation.DateTimeFormat;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/admin/realtime")
@@ -33,9 +35,12 @@ public class RealtimeController {
     @Operation(summary = "获取套牌车检测列表")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getClonePlates(
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) String plateNumber,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int pageSize) {
-        Page<ClonePlateDetection> result = realtimeService.getClonePlates(status, page, pageSize);
+        Page<ClonePlateDetection> result = realtimeService.getClonePlates(status, plateNumber, startTime, endTime, page, pageSize);
         Map<String, Object> response = new HashMap<>();
         response.put("list", realtimeService.toClonePlateDtos(result.getContent()));
         response.put("total", result.getTotalElements());

@@ -880,6 +880,11 @@ const handleCloneQuery = async (startTime: number) => {
   }
   
   if (filters.cloneStatus) params.status = filters.cloneStatus
+  if (filters.plateNumber) params.plateNumber = filters.plateNumber
+  if (filters.dateRange && filters.dateRange.length === 2) {
+    params.startTime = formatLocalDateTime(filters.dateRange[0] as Date)
+    params.endTime = formatLocalDateTime(filters.dateRange[1] as Date)
+  }
   
   console.log('🔍 套牌嫌疑查询参数:', params)
   const res = await getClonePlates(params)
@@ -897,14 +902,6 @@ const handleCloneQuery = async (startTime: number) => {
     }))
     totalCount.value = res.data.total || 0
     queryTime.value = Date.now() - startTime
-    
-    // 如果用户输入了车牌号，在前端过滤
-    if (filters.plateNumber) {
-      queryResult.value = queryResult.value.filter((item: any) => 
-        item.plateNumber?.includes(filters.plateNumber)
-      )
-      totalCount.value = queryResult.value.length
-    }
     
     console.log('✅ 套牌嫌疑查询结果:', queryResult.value.length, '条')
     addToHistory('quick', getQueryDesc())

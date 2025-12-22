@@ -17,6 +17,20 @@ public interface ClonePlateDetectionRepository extends JpaRepository<ClonePlateD
 
     Page<ClonePlateDetection> findByPlateNumber(String plateNumber, Pageable pageable);
 
-    @Query("SELECT COUNT(c) FROM ClonePlateDetection c WHERE c.createTime >= :start AND c.createTime < :end")
-    Long countByCreateTimeRange(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+    @Query("SELECT COUNT(c) FROM ClonePlateDetection c WHERE c.time2 >= :start AND c.time2 < :end")
+    Long countByTime2Range(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    @Query("""
+            SELECT c FROM ClonePlateDetection c
+            WHERE (:status IS NULL OR :status = '' OR c.status = :status)
+              AND (:plate IS NULL OR :plate = '' OR c.plateNumber LIKE CONCAT('%', :plate, '%'))
+              AND (:start IS NULL OR c.time2 >= :start)
+              AND (:end IS NULL OR c.time2 < :end)
+            """)
+    Page<ClonePlateDetection> search(
+            @Param("status") String status,
+            @Param("plate") String plate,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end,
+            Pageable pageable);
 }

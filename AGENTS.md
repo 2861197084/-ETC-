@@ -17,14 +17,16 @@
 - Backend (requires JDK 17+ and Maven):
   - Run: `mvn -f backend/pom.xml spring-boot:run`
   - Package/Test: `mvn -f backend/pom.xml clean test` / `mvn -f backend/pom.xml clean package`
-- Flink jobs (Java 11): `mvn -f flink-jobs/pom.xml clean package -DskipTests`
+- Flink jobs: `mvn -f flink-jobs/pom.xml clean package -DskipTests` (or build in Docker if you don’t have a JDK locally)
 - Data service: `cd data-service && pip install -r requirements.txt`, then:
   - 历史数据入库（2023-12 → HBase）: `python -m scripts.import_to_hbase`
   - 实时数据模拟（2024-01 → Kafka）: `python -m scripts.realtime_simulator`
+  - 套牌检测注入（Kafka → Flink → MySQL）: `python -m scripts.inject_clone_plate --help`
 - Flink jobs（需要先编译 `flink-jobs/`，JAR 会挂载到 JobManager）:
   - 检查 JAR 是否挂载: `docker compose exec flink-jobmanager ls -la /opt/flink/jobs`
   - MySQL 热数据落库: `docker compose exec flink-jobmanager flink run -d -c com.etc.flink.MySqlStorageJob /opt/flink/jobs/etc-flink-jobs-1.0.0.jar`
   - HBase 归档落库: `docker compose exec flink-jobmanager flink run -d -c com.etc.flink.HBaseStorageJob /opt/flink/jobs/etc-flink-jobs-1.0.0.jar`
+  - 套牌检测: `docker compose exec flink-jobmanager flink run -d -c com.etc.flink.ClonePlateDetectorJob /opt/flink/jobs/etc-flink-jobs-1.0.0.jar`
 
 ## Coding Style & Naming Conventions
 
