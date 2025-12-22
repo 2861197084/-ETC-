@@ -65,6 +65,21 @@ springdoc:
   swagger-ui:
     path: /docs
 
+# Spring AI Alibaba 配置
+spring.ai:
+  dashscope:
+    api-key: ${DASHSCOPE_API_KEY:sk-ec2fa8d0e5f342f5b15dd638de8a7f49}
+    chat:
+      options:
+        model: qwen-plus
+
+# DashScope TTS 配置
+dashscope:
+  api-key: ${DASHSCOPE_API_KEY:sk-ec2fa8d0e5f342f5b15dd638de8a7f49}
+  tts:
+    model: cosyvoice-v1
+    voice: longxiaochun  # 可选: longxiaochun(男), longwan(女), longcheng(男童), longshu(男播音)
+
 etc:
   retention:
     days: 7
@@ -83,3 +98,4 @@ trino:
   url: jdbc:trino://${TRINO_HOST:trino}:${TRINO_PORT:8080}
   user: ${TRINO_USER:trino}
   enabled: ${TRINO_ENABLED:true}
+

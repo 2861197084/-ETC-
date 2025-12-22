@@ -17,4 +17,8 @@ public interface CheckpointRepository extends JpaRepository<Checkpoint, Long> {
     List<Checkpoint> findByStatus(Integer status);
 
     List<Checkpoint> findByType(String type);
+
+    List<Checkpoint> findByNameContaining(String name);
+
+    List<Checkpoint> findByDistrictContaining(String district);
 }

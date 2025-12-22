@@ -16,6 +16,7 @@
 | 统计查询 | `/api/stats` | 聚合统计（Redis缓存 + Trino联邦查询） |
 | 地图 | `/admin/map` | 卡口地图与实时态势 |
 | 实时 | `/admin/realtime` | 指挥舱统计/告警 |
+| 预测分析 | `/admin/analysis` | Time-MoE 预测分析（未来 12×5min） |
 | 查询 | `/admin/query` | 查询中心（基础查询 + Text2SQL） |
 
 ---
@@ -150,7 +151,85 @@
 
 ---
 
-## 9. 统计查询（Redis 缓存 + Trino 联邦查询）
+## 9. 预测分析（Time-MoE）
+
+> 预测粒度：5 分钟；预测步数：12（未来 1 小时）。\n+> 页面会每分钟触发一次刷新请求，后端写入请求队列，由 Spark 作业处理并落库结果。\n+
+### POST /admin/analysis/forecast/refresh
+
+触发新一轮预测（写入请求队列）。
+
+请求体：
+
+```json
+{ "checkpointId": "CP016", "fxlx": "2" }
+```
+
+响应：
+
+```json
+{
+  "code": 200,
+  "msg": "success",
+  "data": {
+    "requestId": 123,
+    "checkpointId": "CP016",
+    "fxlx": "2",
+    "asOfTime": "2025-12-23 10:01:12",
+    "modelVersion": "timemoe_etc_flow_v1"
+  }
+}
+```
+
+### GET /admin/analysis/forecast/latest
+
+获取最新预测结果（未来 12 点）。
+
+参数：
+- `checkpointId`（必填）
+- `fxlx`（必填，`1`=进城，`2`=出城）
+- `modelVersion`（可选）
+
+响应（预测完成）：
+
+```json
+{
+  "code": 200,
+  "msg": "success",
+  "data": {
+    "checkpointId": "CP016",
+    "fxlx": "2",
+    "modelVersion": "timemoe_etc_flow_v1",
+    "updatedAt": "2025-12-23 10:01:18",
+    "pending": false,
+    "startTime": "2025-12-23 10:05:00",
+    "times": ["2025-12-23 10:05:00", "2025-12-23 10:10:00", "..."],
+    "values": [123, 118, 97, 88,  ...]
+  }
+}
+```
+
+响应（仍在预测）：
+
+```json
+{
+  "code": 200,
+  "msg": "success",
+  "data": {
+    "checkpointId": "CP016",
+    "fxlx": "2",
+    "pending": true,
+    "requestId": 123,
+    "requestCreatedAt": "2025-12-23 10:01:12",
+    "startTime": "",
+    "times": [],
+    "values": []
+  }
+}
+```
+
+---
+
+## 10. 统计查询（Redis 缓存 + Trino 联邦查询）
 
 > 提供聚合统计能力，自动选择数据源：HBase 历史统计（Redis 缓存）或 MySQL 热数据（Trino 联邦查询）。
 

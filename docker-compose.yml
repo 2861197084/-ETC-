@@ -236,30 +236,69 @@ services:
       context: ./infra/spark
       args:
         SPARK_VERSION: "3.5.4"
-    profiles: [ "spark" ]
     environment:
       SPARK_MODE: master
+      TZ: Asia/Shanghai
     ports:
-      - "8080:8080" # Spark master UI
+      - "18080:8080" # Spark master UI (avoid conflict with backend:8080)
       - "7077:7077" # Spark master
     volumes:
       - spark-data:/data
+    restart: unless-stopped
 
   spark-worker:
     build:
       context: ./infra/spark
       args:
         SPARK_VERSION: "3.5.4"
-    profiles: [ "spark" ]
     environment:
       SPARK_MODE: worker
       SPARK_MASTER_URL: spark://spark-master:7077
+      TZ: Asia/Shanghai
     depends_on:
       - spark-master
     ports:
       - "8082:8081" # Spark worker UI
     volumes:
       - spark-data:/data
+    restart: unless-stopped
+
+  # ==================== Spark 推理作业（Time-MoE 预测） ====================
+  # ⚠️ 默认不启动：容器内安装 PyTorch/Transformers 体积巨大，构建耗时很长。
+  # 推荐方案：在本机运行预测轮询进程（见 scripts/run-forecast-local.py），
+  # 仍然会读写同一套 MySQL 表（forecast_request / checkpoint_flow_forecast_5m）。
+  spark-forecast:
+    build:
+      context: ./infra/spark
+      args:
+        SPARK_VERSION: "3.5.4"
+    profiles: [ "docker-forecast" ]
+    depends_on:
+      spark-master:
+        condition: service_started
+      shardingsphere:
+        condition: service_healthy
+    environment:
+      TZ: Asia/Shanghai
+      SPARK_MASTER_URL: spark://spark-master:7077
+      MYSQL_HOST: shardingsphere
+      MYSQL_PORT: 3307
+      MYSQL_USER: root
+      MYSQL_PASSWORD: "${MYSQL_ROOT_PASSWORD:-root}"
+      MYSQL_DB: etc
+      MODEL_DIR: /workspace/model/etc_flow_5min_epoch5
+      MODEL_VERSION: timemoe_etc_flow_v1
+      LOOP_SECONDS: "10"
+      TORCH_DEVICE: cpu
+      TORCH_DTYPE: fp32
+    entrypoint: [ "bash", "-lc" ]
+    command:
+      - "spark-submit --master ${SPARK_MASTER_URL} /workspace/spark-jobs/etc_flow_forecast_job.py --loop_seconds ${LOOP_SECONDS}"
+    volumes:
+      - ./spark-jobs:/workspace/spark-jobs:ro
+      - ./Time-MoE:/workspace/Time-MoE:ro
+      - ./model:/workspace/model:ro
+    restart: unless-stopped
 
   # ==================== 后端 API 服务 ====================
   backend:
@@ -269,13 +308,15 @@ services:
       - "8080:8080"
     environment:
       # Ensure MySQL DATETIME values are rendered consistently with the demo's simulated timezone.
-      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Shanghai"
-      MYSQL_HOST: shardingsphere
-      MYSQL_PORT: 3307
-      MYSQL_USER: root
-      MYSQL_PASSWORD: "${MYSQL_ROOT_PASSWORD:-root}"
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
+      - JAVA_TOOL_OPTIONS=-Duser.timezone=Asia/Shanghai
+      - MYSQL_HOST=shardingsphere
+      - MYSQL_PORT=3307
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=${MYSQL_ROOT_PASSWORD:-root}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      # DashScope API Key for Agent and TTS：仅透传宿主机环境变量（未设置则不注入，避免覆盖后端默认配置）
+      - DASHSCOPE_API_KEY
     depends_on:
       shardingsphere:
         condition: service_healthy
@@ -310,6 +351,29 @@ services:
       kafka:
         condition: service_healthy
     restart: unless-stopped
+
+  # ==================== Demo 数据预热（可选） ====================
+  # 说明：用于“预测分析页”演示时防止 MySQL 热数据为空导致曲线全 0。
+  # 幂等：仅当 pass_record 为空时才会生成（避免重复灌数据）。
+  # 启动时自动预热：生成最近 24 小时少量历史数据（写入 ShardingSphere -> MySQL）。
+  data-seed:
+    build:
+      context: ./data-service
+    depends_on:
+      shardingsphere:
+        condition: service_healthy
+    environment:
+      MYSQL_HOST: shardingsphere
+      MYSQL_PORT: 3307
+      MYSQL_USER: root
+      MYSQL_PASSWORD: "${MYSQL_ROOT_PASSWORD:-root}"
+      # HBase 非必需：没启 profile hbase 时会自动只写 MySQL
+      HBASE_THRIFT_HOST: hbase
+      HBASE_THRIFT_PORT: 9090
+    entrypoint: [ "bash", "-lc" ]
+    command:
+      - "python -m scripts.generate_history --hours 24 --rate 2 --only-if-empty"
+    restart: "no"
 
   # ==================== Vanna Text2SQL 服务 ====================
   vanna-service:

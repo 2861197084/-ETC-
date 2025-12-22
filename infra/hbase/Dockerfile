@@ -14,16 +14,25 @@ RUN sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list \
 
 WORKDIR /opt
 RUN set -eux; \
-  url="https://archive.apache.org/dist/hbase/${HBASE_VERSION}/hbase-${HBASE_VERSION}-bin.tar.gz"; \
   out="hbase.tgz"; \
+  # 优先尝试清华大学镜像源（国内加速）
+  mirror_url="https://mirrors.tuna.tsinghua.edu.cn/apache/hbase/${HBASE_VERSION}/hbase-${HBASE_VERSION}-bin.tar.gz"; \
+  # 回退到 Apache 官方源
+  official_url="https://archive.apache.org/dist/hbase/${HBASE_VERSION}/hbase-${HBASE_VERSION}-bin.tar.gz"; \
+  echo "尝试从清华镜像下载 HBase ${HBASE_VERSION}..."; \
+  if curl -fL --http1.1 --connect-timeout 10 --max-time 300 -o "${out}" "${mirror_url}"; then \
+  echo "清华镜像下载成功！"; \
+  else \
+  echo "清华镜像不可用，回退到 Apache 官方源..."; \
   i=0; \
   while [ "$i" -lt 12 ]; do \
-  if curl -fL --http1.1 --connect-timeout 20 --max-time 2400 -C - -o "${out}" "${url}"; then \
+  if curl -fL --http1.1 --connect-timeout 20 --max-time 2400 -C - -o "${out}" "${official_url}"; then \
   break; \
   fi; \
   i=$((i+1)); \
   sleep 2; \
   done; \
+  fi; \
   test -s "${out}"; \
   tar -xzf "${out}"; \
   rm "${out}"; \

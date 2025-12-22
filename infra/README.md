@@ -9,7 +9,7 @@
 - MySQL `8.4`（LTS）
 - ShardingSphere-Proxy `5.5.0`
 - HBase `2.6.1`（通过 Zookeeper `3.9.3`）
-- Spark `3.5.4`（可选 profile）
+- Spark `3.5.4`（用于预测分析；推理建议本机 GPU 运行）
 
 > 说明：本项目在 `docker-compose.yml` 中尽量使用 `public.ecr.aws/docker/library/*` 镜像，避免 Docker Hub 拉取不稳定导致的环境搭建失败。
 
@@ -29,11 +29,8 @@ docker compose up -d --build
 docker compose --profile hbase up -d --build
 ```
 
-### 启用 Spark（离线训练/预测）
-
-```bash
-docker compose --profile spark up -d --build
-```
+> Spark（Master/Worker）已默认包含在 `docker compose up` 中；预测推理（Time‑MoE）推荐本机运行（跨平台）：
+> - `python3 scripts/run-forecast-local.py`
 
 ## 常用端口
 
@@ -44,7 +41,7 @@ docker compose --profile spark up -d --build
 - MySQL Shard1: `localhost:33061`（直连调试）
 - Redis: `localhost:6379`
 - HBase Master UI（profile hbase）: `http://localhost:16010`
-- Spark Master UI（profile spark）: `http://localhost:8080`
+- Spark Master UI: `http://localhost:18080`
 
 ## 冒烟验证（可选）
 

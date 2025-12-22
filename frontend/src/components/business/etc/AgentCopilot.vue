@@ -15,10 +15,21 @@
             <el-avatar :size="32" :icon="Service" />
             <div class="header-text">
               <span class="header-title">ETC 智能助手</span>
-              <span class="header-status">在线</span>
+              <span class="header-status" :class="{ online: agentStatus.agent === 'available' }">
+                {{ agentStatus.agent === 'available' ? '在线' : '离线' }}
+              </span>
             </div>
           </div>
           <div class="header-actions">
+            <el-tooltip :content="voiceEnabled ? '关闭语音' : '开启语音'">
+              <el-button 
+                :icon="voiceEnabled ? Microphone : Mute" 
+                circle 
+                size="small" 
+                @click="toggleVoice"
+                :type="voiceEnabled ? 'primary' : 'default'"
+              />
+            </el-tooltip>
             <el-tooltip content="清空对话">
               <el-button :icon="Delete" circle size="small" @click="clearMessages" />
             </el-tooltip>
@@ -40,10 +51,18 @@
             />
             <div class="message-content">
               <div class="message-bubble" v-html="renderMessage(message.content)"></div>
-              <span class="message-time">{{ message.time }}</span>
-              <!-- 卡片类型消息 -->
-              <div v-if="message.card" class="message-card">
-                <component :is="message.card.component" v-bind="message.card.props" />
+              <div class="message-footer">
+                <span class="message-time">{{ message.time }}</span>
+                <!-- 语音播放按钮 -->
+                <el-button
+                  v-if="message.role === 'assistant' && voiceEnabled && agentStatus.tts === 'available'"
+                  :icon="isPlayingMessage === message.id ? VideoPause : VideoPlay"
+                  size="small"
+                  circle
+                  class="voice-btn"
+                  @click="togglePlayMessage(message)"
+                  :loading="isSynthesizing === message.id"
+                />
               </div>
             </div>
             <el-avatar
@@ -99,15 +118,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, markRaw } from 'vue'
+import { ref, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import {
   ChatDotRound,
   Close,
   Service,
   User,
   Delete,
-  Promotion
+  Promotion,
+  Microphone,
+  Mute,
+  VideoPlay,
+  VideoPause
 } from '@element-plus/icons-vue'
+import { sendMessageStream, synthesizeSpeech, getAgentStatus, clearSession } from '@/api/admin/agent'
+import { getTtsPlayer } from '@/utils/tts'
 
 defineOptions({ name: 'AgentCopilot' })
 
@@ -116,10 +141,6 @@ interface Message {
   role: 'user' | 'assistant'
   content: string
   time: string
-  card?: {
-    component: any
-    props: Record<string, any>
-  }
 }
 
 const isOpen = ref(false)
@@ -128,11 +149,24 @@ const inputText = ref('')
 const unreadCount = ref(0)
 const messagesRef = ref<HTMLDivElement>()
 
+// 会话管理
+const sessionId = ref<string>(generateId())
+
+// Agent 状态
+const agentStatus = ref<{ agent: string; tts: string }>({ agent: 'unavailable', tts: 'not_configured' })
+
+// 语音相关
+const voiceEnabled = ref(true)
+const isPlayingMessage = ref<string | null>(null)
+const isSynthesizing = ref<string | null>(null)
+const ttsPlayer = getTtsPlayer()
+
+// 消息列表
 const messages = ref<Message[]>([
   {
     id: '1',
     role: 'assistant',
-    content: '您好！我是 ETC 智能助手，可以帮您查询路况、分析数据、规划路径。请问有什么可以帮您？',
+    content: '您好！我是 ETC 智能交警助手，可以帮您查询路况、分析数据、规划路径。请问有什么可以帮您？',
     time: formatTime(new Date())
   }
 ])
@@ -144,13 +178,6 @@ const quickActions = [
   { label: '🗺️ 路径规划', text: '帮我规划从北京到天津的路线' },
   { label: '⚠️ 异常告警', text: '查询今日异常告警' }
 ]
-
-// 模拟 AI 回复
-const mockResponses: Record<string, string> = {
-  '查询当前路况': `当前高速路况概况：\n\n🟢 **畅通路段**：京哈高速、京承高速\n🟡 **缓行路段**：京沪高速（大羊坊-马驹桥段）\n🔴 **拥堵路段**：京藏高速（北沙滩-回龙观段）\n\n建议避开拥堵路段，选择京承高速出行。`,
-  '查询今日车流统计': `📊 **今日车流统计**（截至当前）\n\n- 总通行量：**128,456** 辆\n- 本地车辆：**89,120** 辆（69.4%）\n- 外地车辆：**39,336** 辆（30.6%）\n- 高峰时段：08:00-09:00\n- 平均车速：**92.3** km/h`,
-  '查询今日异常告警': `⚠️ **今日异常告警汇总**\n\n- 超速告警：**23** 起\n- 套牌车辆：**5** 起\n- 逃费嫌疑：**12** 起\n- 已出警处理：**18** 起\n\n最近一条：京A·88888 于 14:32 在京沪高速超速（152km/h）`
-}
 
 function formatTime(date: Date): string {
   return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
@@ -174,7 +201,23 @@ function toggleChat() {
   }
 }
 
-function clearMessages() {
+function toggleVoice() {
+  voiceEnabled.value = !voiceEnabled.value
+  if (!voiceEnabled.value) {
+    stopPlaying()
+  }
+}
+
+async function clearMessages() {
+  // 清除后端会话
+  try {
+    await clearSession(sessionId.value)
+  } catch (e) {
+    // 忽略
+  }
+  
+  // 重置会话
+  sessionId.value = generateId()
   messages.value = [
     {
       id: generateId(),
@@ -184,6 +227,9 @@ function clearMessages() {
     }
   ]
 }
+
+// 流式对话取消函数
+let cancelStream: (() => void) | null = null
 
 async function sendMessage() {
   if (!inputText.value.trim() || isLoading.value) return
@@ -201,32 +247,51 @@ async function sendMessage() {
 
   await scrollToBottom()
 
-  // 模拟 AI 思考
+  // 开始加载
   isLoading.value = true
-  await new Promise((resolve) => setTimeout(resolve, 1000 + Math.random() * 1000))
-  isLoading.value = false
 
-  // 生成回复
-  let response = mockResponses[query]
-  if (!response) {
-    // 默认回复
-    if (query.includes('路线') || query.includes('规划')) {
-      response = `🗺️ **路径规划结果**\n\n为您规划的最优路线：\n\n1. 从起点出发，沿京沪高速行驶\n2. 途经廊坊收费站\n3. 预计行程时间：**1小时25分钟**\n4. 预计过路费：**￥85**\n\n当前路况良好，建议立即出发。`
-    } else if (query.includes('收费') || query.includes('费用')) {
-      response = `💰 **收费查询**\n\n根据您的行程：\n- 小型车（1类）：￥85\n- 中型车（2类）：￥120\n- 大型车（3类）：￥180\n\n支持 ETC 快捷缴费，享受95折优惠。`
-    } else {
-      response = `好的，我理解您的问题是关于"${query}"。\n\n正在为您查询相关信息，请稍候...\n\n如果您需要更具体的帮助，可以尝试以下方式提问：\n- 查询某条高速的实时路况\n- 规划从A地到B地的路线\n- 查询今日的车流统计数据`
-    }
-  }
-
+  // 创建助手消息占位
   const assistantMessage: Message = {
     id: generateId(),
     role: 'assistant',
-    content: response,
+    content: '',
     time: formatTime(new Date())
   }
-
   messages.value.push(assistantMessage)
+
+  try {
+    // 使用流式 API
+    cancelStream = await sendMessageStream(
+      sessionId.value,
+      query,
+      // onChunk
+      (chunk: string) => {
+        assistantMessage.content += chunk
+        scrollToBottom()
+      },
+      // onComplete
+      async () => {
+        isLoading.value = false
+        cancelStream = null
+        
+        // 自动播放语音
+        if (voiceEnabled.value && agentStatus.value.tts === 'available') {
+          await playMessageVoice(assistantMessage)
+        }
+      },
+      // onError
+      (error: Error) => {
+        console.error('[Agent] 对话失败:', error)
+        assistantMessage.content = '抱歉，处理您的请求时出现错误，请稍后重试。'
+        isLoading.value = false
+        cancelStream = null
+      }
+    )
+  } catch (error) {
+    console.error('[Agent] 发送消息失败:', error)
+    assistantMessage.content = '抱歉，连接服务失败，请检查网络后重试。'
+    isLoading.value = false
+  }
 
   if (!isOpen.value) {
     unreadCount.value++
@@ -246,6 +311,84 @@ async function scrollToBottom() {
     messagesRef.value.scrollTop = messagesRef.value.scrollHeight
   }
 }
+
+// 语音播放
+async function playMessageVoice(message: Message) {
+  if (isSynthesizing.value || isPlayingMessage.value) return
+  
+  isSynthesizing.value = message.id
+  
+  try {
+    const audioBlob = await synthesizeSpeech(message.content)
+    if (!audioBlob) {
+      console.warn('[TTS] 无音频数据')
+      return
+    }
+
+    isPlayingMessage.value = message.id
+    
+    ttsPlayer.setOnPlayStateChange((playing) => {
+      if (!playing) {
+        isPlayingMessage.value = null
+      }
+    })
+
+    await ttsPlayer.play(audioBlob)
+  } catch (error) {
+    console.error('[TTS] 播放失败:', error)
+  } finally {
+    isSynthesizing.value = null
+  }
+}
+
+function togglePlayMessage(message: Message) {
+  if (isPlayingMessage.value === message.id) {
+    stopPlaying()
+  } else {
+    playMessageVoice(message)
+  }
+}
+
+function stopPlaying() {
+  ttsPlayer.stop()
+  isPlayingMessage.value = null
+}
+
+// 获取 Agent 状态
+async function fetchAgentStatus() {
+  try {
+    const res = await getAgentStatus()
+    agentStatus.value = res.data
+  } catch (error) {
+    console.warn('[Agent] 获取状态失败')
+  }
+}
+
+// 监听窗口打开
+watch(isOpen, (newVal) => {
+  if (newVal) {
+    fetchAgentStatus()
+  }
+})
+
+onMounted(() => {
+  fetchAgentStatus()
+  
+  // 设置 TTS 播放状态回调
+  ttsPlayer.setOnPlayStateChange((playing) => {
+    if (!playing) {
+      isPlayingMessage.value = null
+    }
+  })
+})
+
+onUnmounted(() => {
+  // 清理资源
+  if (cancelStream) {
+    cancelStream()
+  }
+  ttsPlayer.stop()
+})
 </script>
 
 <style lang="scss" scoped>
@@ -302,7 +445,7 @@ async function scrollToBottom() {
   right: 0;
   bottom: 72px;
   width: 400px;
-  height: 560px;
+  height: 680px;
   background: var(--el-bg-color);
   border-radius: 16px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
@@ -337,11 +480,18 @@ async function scrollToBottom() {
       .header-status {
         font-size: 12px;
         opacity: 0.8;
+        
+        &.online {
+          color: #67c23a;
+        }
       }
     }
   }
 
   .header-actions {
+    display: flex;
+    gap: 8px;
+    
     :deep(.el-button) {
       background: rgba(255, 255, 255, 0.2);
       border-color: transparent;
@@ -349,6 +499,10 @@ async function scrollToBottom() {
 
       &:hover {
         background: rgba(255, 255, 255, 0.3);
+      }
+      
+      &.el-button--primary {
+        background: rgba(103, 194, 58, 0.6);
       }
     }
   }
@@ -376,8 +530,8 @@ async function scrollToBottom() {
       border-radius: 16px 16px 4px 16px;
     }
 
-    .message-time {
-      text-align: right;
+    .message-footer {
+      justify-content: flex-end;
     }
   }
 
@@ -432,17 +586,26 @@ async function scrollToBottom() {
   }
 }
 
-.message-time {
-  display: block;
+.message-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-top: 4px;
+}
+
+.message-time {
   font-size: 11px;
   color: var(--el-text-color-secondary);
 }
 
-.message-card {
-  margin-top: 8px;
-  border-radius: 8px;
-  overflow: hidden;
+.voice-btn {
+  padding: 4px;
+  height: 20px;
+  width: 20px;
+  
+  :deep(.el-icon) {
+    font-size: 12px;
+  }
 }
 
 .chat-input {

@@ -36,6 +36,16 @@ export const etcRoutes: AppRouteRecord = {
       }
     },
     {
+      path: 'analysis',
+      name: 'EtcAnalysis',
+      component: '/etc/analysis',
+      meta: {
+        title: '预测分析',
+        icon: 'ri:line-chart-line',
+        keepAlive: false
+      }
+    },
+    {
       path: 'query',
       name: 'EtcQuery',
       component: '/etc/query',

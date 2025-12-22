@@ -27,29 +27,34 @@ export default ({ mode }: { mode: string }) => {
     server: {
       port: Number(VITE_PORT),
       proxy: {
+        '/api/agent': {
+          // Agent API 转发到 Python 服务
+          target: 'http://127.0.0.1:8091',
+          changeOrigin: true
+        },
         '/api': {
-          // 前端所有 /api 开头的请求，转发到本机后端 8080
-          target: 'http://localhost:8080',
+          // 其他 /api 请求转发到 Java 后端
+          target: 'http://127.0.0.1:8080',
           changeOrigin: true
         },
         '/admin': {
           // 管理员接口转发到后端
-          target: 'http://localhost:8080',
+          target: 'http://127.0.0.1:8080',
           changeOrigin: true
         },
         '/owner': {
           // 车主接口转发到后端
-          target: 'http://localhost:8080',
+          target: 'http://127.0.0.1:8080',
           changeOrigin: true
         },
         '/ws': {
           // WebSocket 告警转发到后端
-          target: 'http://localhost:8080',
+          target: 'http://127.0.0.1:8080',
           ws: true,
           changeOrigin: true
         }
       },
-      host: true
+      host: '0.0.0.0'
     },
     // 路径别名
     resolve: {

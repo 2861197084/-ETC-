@@ -155,3 +155,39 @@ CREATE TABLE IF NOT EXISTS appeal (
     KEY idx_plate (plate_number),
     KEY idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='申诉记录表';
+
+-- ============================================================
+-- Time-MoE 预测分析（5 分钟粒度，未来 12 点）
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS checkpoint_flow_forecast_5m (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    checkpoint_id VARCHAR(64) NOT NULL COMMENT '卡口ID（CP001..CP019）',
+    fxlx VARCHAR(32) NOT NULL COMMENT '方向类型 FXLX（1=进城，2=出城）',
+    start_time DATETIME NOT NULL COMMENT '预测起点（对齐 5min，预测第 1 个点的时间）',
+    freq_min INT NOT NULL DEFAULT 5 COMMENT '时间粒度（分钟），固定 5',
+    context_length INT NOT NULL DEFAULT 256 COMMENT '上下文长度（5min 点数）',
+    prediction_length INT NOT NULL DEFAULT 12 COMMENT '预测长度（未来点数）',
+    values_json JSON NOT NULL COMMENT '预测值数组（长度=prediction_length）',
+    model_version VARCHAR(64) NOT NULL DEFAULT 'timemoe_etc_flow_v1' COMMENT '模型版本标识',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_series_time_model (checkpoint_id, fxlx, start_time, model_version),
+    KEY idx_start_time (start_time),
+    KEY idx_checkpoint_time (checkpoint_id, start_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='卡口×方向 5min 流量预测（未来 12 点）';
+
+CREATE TABLE IF NOT EXISTS forecast_request (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    checkpoint_id VARCHAR(64) NOT NULL COMMENT '卡口ID（CP001..CP019）',
+    fxlx VARCHAR(32) NOT NULL COMMENT '方向类型 FXLX（1=进城，2=出城）',
+    as_of_time DATETIME NOT NULL COMMENT '请求发起时间（用于标记“新一轮预测”）',
+    status VARCHAR(16) NOT NULL DEFAULT 'pending' COMMENT '状态：pending/done/failed',
+    result_start_time DATETIME NULL COMMENT '预测起点（done 时写入，便于查询结果）',
+    model_version VARCHAR(64) NOT NULL DEFAULT 'timemoe_etc_flow_v1' COMMENT '模型版本标识',
+    err_msg VARCHAR(512) NULL COMMENT '失败原因（failed 时）',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_status_created (status, created_at),
+    KEY idx_series_created (checkpoint_id, fxlx, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='预测刷新请求队列（前端每分钟触发）';

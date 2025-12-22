@@ -5,7 +5,8 @@
     <mirrors>
         <mirror>
             <id>aliyunmaven</id>
-            <mirrorOf>*</mirrorOf>
+            <!-- 仅镜像 central，保留 pom.xml 中的 spring-milestones 等仓库以拉取里程碑依赖 -->
+            <mirrorOf>central</mirrorOf>
             <name>阿里云公共仓库</name>
             <url>https://maven.aliyun.com/repository/public</url>
         </mirror>

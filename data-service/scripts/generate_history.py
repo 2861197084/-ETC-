@@ -302,12 +302,30 @@ def generate_history(start_time: datetime, end_time: datetime, records_per_secon
             hbase_conn.close()
 
 
+def has_any_pass_record(mysql_conn) -> bool:
+    """判断 ShardingSphere 逻辑表 pass_record 是否已有数据（用于 demo 预热幂等）。"""
+    try:
+        with mysql_conn.cursor() as cursor:
+            cursor.execute("SELECT 1 FROM pass_record LIMIT 1")
+            row = cursor.fetchone()
+        return row is not None
+    except Exception as e:
+        # 如果查询失败，不做拦截，继续走生成逻辑（避免误判导致永远不生成）
+        logger.warning(f"检查 pass_record 是否为空失败，将继续生成：{e}")
+        return False
+
+
 def main():
     parser = argparse.ArgumentParser(description="生成历史数据（直接写入数据库）")
     parser.add_argument("--start", help="开始时间 (YYYY-MM-DD HH:MM:SS)，默认今天00:00")
     parser.add_argument("--end", help="结束时间 (YYYY-MM-DD HH:MM:SS)，默认当前时间")
     parser.add_argument("--hours", type=float, help="从当前时间往前多少小时，优先于 --start")
     parser.add_argument("--rate", type=int, default=50, help="每秒记录数（默认50）")
+    parser.add_argument(
+        "--only-if-empty",
+        action="store_true",
+        help="仅当 MySQL(ShardingSphere) 逻辑表 pass_record 为空时才生成（用于容器启动预热，避免重复灌数据）",
+    )
     
     args = parser.parse_args()
     
@@ -323,6 +341,24 @@ def main():
         start_time = now.replace(hour=0, minute=0, second=0, microsecond=0)
         end_time = now
     
+    # 如果只在空库时才生成：提前连库检查一次，避免容器每次 up 都重复灌数据
+    if args.only_if_empty:
+        mysql_conn = None
+        try:
+            mysql_conn = get_mysql_conn()
+            if has_any_pass_record(mysql_conn):
+                logger.info("✅ 检测到 pass_record 已有数据，跳过历史数据预热（--only-if-empty）")
+                return
+            logger.info("pass_record 为空，开始执行历史数据预热…")
+        except Exception as e:
+            logger.warning(f"预检查 MySQL 失败，将继续生成：{e}")
+        finally:
+            try:
+                if mysql_conn:
+                    mysql_conn.close()
+            except Exception:
+                pass
+
     generate_history(start_time, end_time, args.rate)
 
 

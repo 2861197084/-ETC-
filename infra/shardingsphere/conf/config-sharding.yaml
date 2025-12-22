@@ -56,9 +56,11 @@ rules:
       - checkpoint
       - checkpoint_dim
       - checkpoint_flow
+      - checkpoint_flow_forecast_5m
       - agg_checkpoint_minute
       - violation
       - clone_plate_detection
+      - forecast_request
       - alert
       - appeal
       - query_history
