@@ -48,16 +48,19 @@ def parse_time(s: str) -> str:
     return dt.strftime(TIME_FORMAT)
 
 
-def get_simulated_time(time_api: str) -> str:
+def get_simulated_time_and_window(time_api: str) -> tuple[str, str, str]:
+    """获取模拟时间和当前窗口"""
     try:
         resp = requests.get(time_api, timeout=5)
         resp.raise_for_status()
         payload = resp.json()
         data = payload.get("data", {})
         sim = data.get("simulatedTime")
+        window_start = data.get("windowStart")
+        window_end = data.get("windowEnd")
         if not sim:
             raise ValueError("missing data.simulatedTime")
-        return parse_time(sim)
+        return parse_time(sim), parse_time(window_start) if window_start else sim, parse_time(window_end) if window_end else sim
     except Exception as e:
         raise RuntimeError(f"Failed to get simulated time from {time_api}: {e}") from e
 
@@ -159,8 +162,8 @@ def main() -> int:
     )
     parser.add_argument(
         "--time-api",
-        default=os.getenv("BACKEND_TIME_API", "http://localhost:8080/api/time"),
-        help="Backend time API for --auto-time (default: $BACKEND_TIME_API or http://localhost:8080/api/time)",
+        default=os.getenv("BACKEND_TIME_API", "http://backend:8080/api/time"),
+        help="Backend time API for --auto-time (default: $BACKEND_TIME_API or http://backend:8080/api/time)",
     )
     parser.add_argument("--direction1", default="1", help="Direction for record 1 (fxlx)")
     parser.add_argument("--direction2", default="2", help="Direction for record 2 (fxlx)")
@@ -169,12 +172,18 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.auto_time:
-        sim_now = datetime.strptime(get_simulated_time(args.time_api), TIME_FORMAT)
-        # Make sure injected events are <= simulated now, so dashboards based on simulated time can "see" them.
-        t2_dt = sim_now - timedelta(seconds=60)
-        t1_dt = t2_dt - timedelta(seconds=120)
+        sim_now_str, window_start_str, window_end_str = get_simulated_time_and_window(args.time_api)
+        sim_now = datetime.strptime(sim_now_str, TIME_FORMAT)
+        window_start = datetime.strptime(window_start_str, TIME_FORMAT)
+        
+        # 在当前窗口内生成两个时间点，相差2分钟（在5分钟检测阈值内）
+        # t1 在窗口开始后1分钟，t2 在窗口开始后3分钟
+        t1_dt = window_start + timedelta(minutes=1)
+        t2_dt = window_start + timedelta(minutes=3)
         t1 = t1_dt.strftime(TIME_FORMAT)
         t2 = t2_dt.strftime(TIME_FORMAT)
+        
+        logger.info(f"⏰ 模拟时间: {sim_now_str}, 窗口: {window_start_str} ~ {window_end_str}")
     else:
         if not args.t1 or not args.t2:
             parser.error("either provide --t1 and --t2, or use --auto-time")
@@ -195,6 +204,7 @@ def main() -> int:
     r2 = build_record(args.plate, t2, cp2, direction=args.direction2)
 
     # Use plate as key so records are in-order per partition (helps deterministic testing).
+    producer.connect()
     producer.send(r1, key=args.plate)
     producer.send(r2, key=args.plate)
     producer.flush()

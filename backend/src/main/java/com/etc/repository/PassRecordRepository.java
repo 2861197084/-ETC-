@@ -33,7 +33,10 @@ public interface PassRecordRepository extends JpaRepository<PassRecord, Long> {
             "(:checkpointId IS NULL OR p.checkpointId = :checkpointId) AND " +
             "(:startTime IS NULL OR p.gcsj >= :startTime) AND " +
             "(:endTime IS NULL OR p.gcsj <= :endTime) AND " +
-            "(:direction IS NULL OR p.fxlx = :direction)")
+            "(:direction IS NULL OR " +
+            "(:direction = '1' AND (p.fxlx = '1' OR p.fxlx = '进城')) OR " +
+            "(:direction = '2' AND (p.fxlx = '2' OR p.fxlx = '出城')) OR " +
+            "(p.fxlx = :direction))")
     Page<PassRecord> search(
             @Param("plate") String plate,
             @Param("checkpointId") String checkpointId,
@@ -62,4 +65,28 @@ public interface PassRecordRepository extends JpaRepository<PassRecord, Long> {
      */
     @Query("SELECT COUNT(p) FROM PassRecord p WHERE p.gcsj >= :start AND p.gcsj < :end AND p.hp NOT LIKE '苏C%'")
     Long countForeignVehicles(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    /**
+     * 按区域统计通行量（用于区域热度排名）
+     */
+    @Query("SELECT p.xzqhmc, COUNT(p) FROM PassRecord p WHERE p.gcsj >= :start AND p.gcsj < :end GROUP BY p.xzqhmc ORDER BY COUNT(p) DESC")
+    List<Object[]> countByRegionInRange(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    /**
+     * 统计指定卡口的通行量
+     */
+    @Query("SELECT COUNT(p) FROM PassRecord p WHERE p.checkpointId = :checkpointId AND p.gcsj >= :start AND p.gcsj < :end")
+    Long countByCheckpointIdInRange(@Param("checkpointId") String checkpointId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    /**
+     * 统计指定卡口的本地车辆数
+     */
+    @Query("SELECT COUNT(p) FROM PassRecord p WHERE p.checkpointId = :checkpointId AND p.gcsj >= :start AND p.gcsj < :end AND p.hp LIKE '苏C%'")
+    Long countLocalByCheckpointIdInRange(@Param("checkpointId") String checkpointId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    /**
+     * 统计指定卡口的外地车辆数
+     */
+    @Query("SELECT COUNT(p) FROM PassRecord p WHERE p.checkpointId = :checkpointId AND p.gcsj >= :start AND p.gcsj < :end AND p.hp NOT LIKE '苏C%'")
+    Long countForeignByCheckpointIdInRange(@Param("checkpointId") String checkpointId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 }

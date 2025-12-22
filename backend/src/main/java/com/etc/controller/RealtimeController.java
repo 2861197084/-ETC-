@@ -37,6 +37,20 @@ public class RealtimeController {
         return ResponseEntity.ok(ApiResponse.success(realtimeService.getVehicleSourceStats()));
     }
 
+    @GetMapping("/region-heat")
+    @Operation(summary = "获取区域热度排名统计")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getRegionHeat(
+            @RequestParam(defaultValue = "hour") String timeRange) {
+        return ResponseEntity.ok(ApiResponse.success(realtimeService.getRegionHeatStats(timeRange)));
+    }
+
+    @GetMapping("/checkpoint/{checkpointId}/stats")
+    @Operation(summary = "获取单个卡口的实时统计数据")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getCheckpointStats(
+            @PathVariable String checkpointId) {
+        return ResponseEntity.ok(ApiResponse.success(realtimeService.getCheckpointStats(checkpointId)));
+    }
+
     @GetMapping("/clone-plates")
     @Operation(summary = "获取套牌车检测列表")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getClonePlates(
@@ -97,6 +111,13 @@ public class RealtimeController {
     @Operation(summary = "获取站口压力预警")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getPressureWarnings() {
         return ResponseEntity.ok(ApiResponse.success(realtimeService.getPressureWarnings()));
+    }
+
+    @GetMapping("/flow-alerts")
+    @Operation(summary = "检测车流量高峰告警", description = "返回超过阈值的卡口列表，用于触发前端弹窗提醒")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getFlowAlerts(
+            @RequestParam(defaultValue = "0.7") double threshold) {
+        return ResponseEntity.ok(ApiResponse.success(realtimeService.detectFlowAlerts(threshold)));
     }
 
     @GetMapping("/flow")

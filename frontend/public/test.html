@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ETC系统测试页面</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 40px;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    h1 {
+      color: #fff;
+      text-align: center;
+      margin-bottom: 40px;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .test-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    }
+    .test-card h2 {
+      color: #333;
+      margin-bottom: 12px;
+      font-size: 18px;
+    }
+    .test-card p {
+      color: #666;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+    .form-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+      align-items: center;
+    }
+    .form-row label {
+      color: #333;
+      font-size: 14px;
+      min-width: 80px;
+    }
+    .form-row select, .form-row input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-danger {
+      background: linear-gradient(135deg, #ff416c, #ff4b2b);
+      color: #fff;
+    }
+    .btn-danger:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(255, 65, 108, 0.4);
+    }
+    .btn-warning {
+      background: linear-gradient(135deg, #f093fb, #f5576c);
+      color: #fff;
+    }
+    .btn-warning:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(245, 87, 108, 0.4);
+    }
+    .btn-success {
+      background: linear-gradient(135deg, #11998e, #38ef7d);
+      color: #fff;
+    }
+    .btn-success:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(56, 239, 125, 0.4);
+    }
+    .btn-stop {
+      background: linear-gradient(135deg, #434343, #000000);
+      color: #fff;
+    }
+    .btn-stop:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+    .btn-group {
+      display: flex;
+      gap: 12px;
+    }
+    .simulator-status {
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+    .status-badge {
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 12px;
+    }
+    .status-badge.running {
+      background: #d4edda;
+      color: #155724;
+    }
+    .status-badge.stopped {
+      background: #f8d7da;
+      color: #721c24;
+    }
+    .result {
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      display: none;
+    }
+    .result.success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+      display: block;
+    }
+    .result.error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+      display: block;
+    }
+    .tips {
+      background: #e7f3ff;
+      border: 1px solid #b3d7ff;
+      border-radius: 8px;
+      padding: 16px;
+      color: #004085;
+      font-size: 14px;
+    }
+    .tips h3 {
+      margin-bottom: 8px;
+    }
+    .tips ul {
+      padding-left: 20px;
+    }
+    .tips li {
+      margin-bottom: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🚗 ETC 系统功能测试</h1>
+
+    <!-- 测试1: 车流量高峰 -->
+    <div class="test-card">
+      <h2>📊 测试1: 模拟车流量高峰</h2>
+      <p>向指定站点注入大量通行记录，触发车流量高峰告警</p>
+      <div class="form-row">
+        <label>选择站点:</label>
+        <select id="checkpoint">
+          <option value="CP001">睢宁卡1(104省道)</option>
+          <option value="CP002">沛县卡2(311国道)</option>
+          <option value="CP003">沛县卡3(徐丰高速)</option>
+          <option value="CP004">沛县卡4(宿新高速)</option>
+          <option value="CP005">新沂卡1(205国道)</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>注入数量:</label>
+        <input type="number" id="flowCount" value="500" min="100" max="2000">
+      </div>
+      <button class="btn btn-danger" onclick="triggerFlowPeak()">
+        🔥 触发车流量高峰
+      </button>
+      <div id="flowResult" class="result"></div>
+    </div>
+
+    <!-- 测试2: 套牌车检测 -->
+    <div class="test-card">
+      <h2>🚨 测试2: 模拟套牌车辆</h2>
+      <p>让同一车牌在极短时间内出现在两个相距较远的站点</p>
+      <div class="form-row">
+        <label>车牌号:</label>
+        <input type="text" id="plateNumber" value="苏C12345">
+      </div>
+      <div class="form-row">
+        <label>站点1:</label>
+        <select id="checkpoint1">
+          <option value="CP001">睢宁卡1(104省道)</option>
+          <option value="CP005">新沂卡1(205国道)</option>
+          <option value="CP010">邳州卡4(邳新高速)</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>站点2:</label>
+        <select id="checkpoint2">
+          <option value="CP011">贾汪卡5(京沪高速)</option>
+          <option value="CP015" selected>宿迁卡1(京沪高速)</option>
+          <option value="CP019">铜山卡4(徐济高速)</option>
+        </select>
+      </div>
+      <button class="btn btn-warning" onclick="triggerClonePlate()">
+        🎭 触发套牌检测
+      </button>
+      <div id="cloneResult" class="result"></div>
+    </div>
+
+    <!-- 测试3: 实时数据模拟器 -->
+    <div class="test-card">
+      <h2>⏱️ 测试3: 实时数据模拟器</h2>
+      <p>持续产生实时通行数据，模拟真实车流</p>
+      <div class="simulator-status">
+        状态: <span id="simulatorStatus" class="status-badge stopped">已停止</span>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-success" id="startBtn" onclick="startSimulator()">
+          ▶️ 启动模拟器
+        </button>
+        <button class="btn btn-stop" id="stopBtn" onclick="stopSimulator()" disabled>
+          ⏹️ 停止模拟器
+        </button>
+      </div>
+      <div id="simulatorResult" class="result"></div>
+    </div>
+
+    <!-- 使用提示 -->
+    <div class="tips">
+      <h3>💡 使用说明</h3>
+      <ul>
+        <li><b>首先启动测试API服务：</b></li>
+        <li><code>docker compose run --rm -p 8001:8001 data-service python -m app.test_api</code></li>
+        <li>点击按钮后，数据会注入到数据库</li>
+        <li>切换到大屏页面查看告警效果</li>
+        <li>车流量高峰会在右侧告警列表显示</li>
+        <li>套牌车会触发告警并显示在列表中</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:8001'
+
+    // 触发车流量高峰
+    async function triggerFlowPeak() {
+      const checkpoint = document.getElementById('checkpoint').value
+      const count = document.getElementById('flowCount').value
+      const resultEl = document.getElementById('flowResult')
+      const btn = event.target
+      
+      btn.disabled = true
+      btn.textContent = '⏳ 注入中...'
+      resultEl.className = 'result'
+      resultEl.style.display = 'none'
+
+      try {
+        const res = await fetch(`${API_BASE}/inject/flow-peak`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ checkpoint_id: checkpoint, count: parseInt(count) })
+        })
+        const data = await res.json()
+        
+        if (data.success) {
+          resultEl.className = 'result success'
+          resultEl.innerHTML = `✅ ${data.message}<br>请刷新大屏查看车流量告警。<br><small>${data.stdout || ''}</small>`
+        } else {
+          throw new Error(data.error || data.stderr || '请求失败')
+        }
+      } catch (e) {
+        resultEl.className = 'result error'
+        resultEl.innerHTML = `❌ 失败: ${e.message}<br><small>请确保 data-service 测试API已启动</small>`
+      } finally {
+        btn.disabled = false
+        btn.textContent = '🔥 触发车流量高峰'
+      }
+    }
+
+    // 触发套牌检测
+    async function triggerClonePlate() {
+      const plateNumber = document.getElementById('plateNumber').value
+      const checkpoint1 = document.getElementById('checkpoint1').value
+      const checkpoint2 = document.getElementById('checkpoint2').value
+      const resultEl = document.getElementById('cloneResult')
+      const btn = event.target
+      
+      btn.disabled = true
+      btn.textContent = '⏳ 注入中...'
+      resultEl.className = 'result'
+      resultEl.style.display = 'none'
+
+      try {
+        const res = await fetch(`${API_BASE}/inject/clone-plate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            plate_number: plateNumber, 
+            checkpoint1: checkpoint1, 
+            checkpoint2: checkpoint2 
+          })
+        })
+        const data = await res.json()
+        
+        if (data.success) {
+          resultEl.className = 'result success'
+          resultEl.innerHTML = `✅ ${data.message}<br>请查看大屏的套牌告警。<br><small>${data.stdout || ''}</small>`
+        } else {
+          throw new Error(data.error || data.stderr || '请求失败')
+        }
+      } catch (e) {
+        resultEl.className = 'result error'
+        resultEl.innerHTML = `❌ 失败: ${e.message}<br><small>请确保 data-service 测试API已启动</small>`
+      } finally {
+        btn.disabled = false
+        btn.textContent = '🎭 触发套牌检测'
+      }
+    }
+
+    // 检查模拟器状态
+    async function checkSimulatorStatus() {
+      try {
+        const res = await fetch(`${API_BASE}/simulator/status`)
+        const data = await res.json()
+        updateSimulatorUI(data.running)
+      } catch (e) {
+        updateSimulatorUI(false)
+      }
+    }
+
+    // 更新模拟器 UI
+    function updateSimulatorUI(running) {
+      const statusEl = document.getElementById('simulatorStatus')
+      const startBtn = document.getElementById('startBtn')
+      const stopBtn = document.getElementById('stopBtn')
+      
+      if (running) {
+        statusEl.textContent = '运行中'
+        statusEl.className = 'status-badge running'
+        startBtn.disabled = true
+        stopBtn.disabled = false
+      } else {
+        statusEl.textContent = '已停止'
+        statusEl.className = 'status-badge stopped'
+        startBtn.disabled = false
+        stopBtn.disabled = true
+      }
+    }
+
+    // 启动模拟器
+    async function startSimulator() {
+      const resultEl = document.getElementById('simulatorResult')
+      const btn = document.getElementById('startBtn')
+      
+      btn.disabled = true
+      btn.textContent = '⏳ 启动中...'
+
+      try {
+        const res = await fetch(`${API_BASE}/simulator/start`, { method: 'POST' })
+        const data = await res.json()
+        
+        if (data.success) {
+          resultEl.className = 'result success'
+          resultEl.innerHTML = `✅ ${data.message} (PID: ${data.pid})`
+          updateSimulatorUI(true)
+        } else {
+          throw new Error(data.message || data.error)
+        }
+      } catch (e) {
+        resultEl.className = 'result error'
+        resultEl.innerHTML = `❌ 失败: ${e.message}`
+        updateSimulatorUI(false)
+      } finally {
+        btn.textContent = '▶️ 启动模拟器'
+      }
+    }
+
+    // 停止模拟器
+    async function stopSimulator() {
+      const resultEl = document.getElementById('simulatorResult')
+      const btn = document.getElementById('stopBtn')
+      
+      btn.disabled = true
+      btn.textContent = '⏳ 停止中...'
+
+      try {
+        const res = await fetch(`${API_BASE}/simulator/stop`, { method: 'POST' })
+        const data = await res.json()
+        
+        resultEl.className = 'result success'
+        resultEl.innerHTML = `✅ ${data.message}`
+        updateSimulatorUI(false)
+      } catch (e) {
+        resultEl.className = 'result error'
+        resultEl.innerHTML = `❌ 失败: ${e.message}`
+      } finally {
+        btn.textContent = '⏹️ 停止模拟器'
+      }
+    }
+
+    // 页面加载时检查状态
+    checkSimulatorStatus()
+    // 每5秒检查一次状态
+    setInterval(checkSimulatorStatus, 5000)
+  </script>
+</body>
+</html>

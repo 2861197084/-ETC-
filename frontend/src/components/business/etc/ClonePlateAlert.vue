@@ -63,15 +63,7 @@
       </div>
     </el-dialog>
     
-    <!-- 右下角通知角标 -->
-    <div v-if="alerts.length > 0" class="alert-badge" @click="showLatestAlert">
-      <el-badge :value="alerts.length" :max="99">
-        <div class="badge-icon">
-          <el-icon :size="24"><Warning /></el-icon>
-        </div>
-      </el-badge>
-      <span class="badge-text">套牌警报</span>
-    </div>
+    <!-- 已移除右下角角标，套牌告警现在显示在右侧 AlertTicker 列表中 -->
   </div>
 </template>
 
@@ -100,7 +92,6 @@ interface ClonePlateAlert {
 
 const modalVisible = ref(false)
 const currentAlert = ref<ClonePlateAlert | null>(null)
-const alerts = ref<ClonePlateAlert[]>([])
 const lastCheckId = ref(0)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
@@ -127,10 +118,7 @@ async function pollClonePlates() {
         // 更新最后检查的ID
         lastCheckId.value = Math.max(...list.map((item: any) => item.id))
         
-        // 添加到警报列表
-        alerts.value = [...newAlerts, ...alerts.value].slice(0, 50) // 最多保留50条
-        
-        // 显示最新的弹窗
+        // 显示最新的弹窗（套牌车告警也会通过 AlertTicker 显示在右侧列表中）
         currentAlert.value = newAlerts[0]
         modalVisible.value = true
         
@@ -154,21 +142,13 @@ function playAlertSound() {
   } catch {}
 }
 
-// 显示最新警报
-function showLatestAlert() {
-  if (alerts.value.length > 0) {
-    currentAlert.value = alerts.value[0]
-    modalVisible.value = true
-  }
-}
-
 // 确认套牌
 async function confirmAlert() {
   if (!currentAlert.value) return
   try {
     await handleClonePlate(String(currentAlert.value.id), { status: 'confirmed' })
     ElMessage.success('已确认为套牌车')
-    removeCurrentAlert()
+    closeModal()
   } catch {
     ElMessage.error('操作失败')
   }
@@ -180,17 +160,14 @@ async function dismissAlert() {
   try {
     await handleClonePlate(String(currentAlert.value.id), { status: 'dismissed' })
     ElMessage.info('已标记为误报')
-    removeCurrentAlert()
+    closeModal()
   } catch {
     ElMessage.error('操作失败')
   }
 }
 
-// 移除当前警报
-function removeCurrentAlert() {
-  if (currentAlert.value) {
-    alerts.value = alerts.value.filter(a => a.id !== currentAlert.value!.id)
-  }
+// 关闭弹窗
+function closeModal() {
   modalVisible.value = false
   currentAlert.value = null
 }
@@ -284,45 +261,6 @@ onUnmounted(() => {
       justify-content: flex-end;
       margin-top: 24px;
     }
-  }
-  
-  .alert-badge {
-    position: fixed;
-    bottom: 24px;
-    right: 24px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 16px;
-    background: linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%);
-    border-radius: 8px;
-    cursor: pointer;
-    box-shadow: 0 4px 12px rgba(255, 77, 79, 0.4);
-    animation: pulse 2s infinite;
-    z-index: 1000;
-    
-    .badge-icon {
-      font-size: 24px;
-      color: #fff;
-    }
-    
-    .badge-text {
-      color: #fff;
-      font-weight: 500;
-    }
-    
-    &:hover {
-      transform: scale(1.05);
-    }
-  }
-}
-
-@keyframes pulse {
-  0%, 100% {
-    box-shadow: 0 4px 12px rgba(255, 77, 79, 0.4);
-  }
-  50% {
-    box-shadow: 0 4px 24px rgba(255, 77, 79, 0.8);
   }
 }
 

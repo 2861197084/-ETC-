@@ -98,6 +98,135 @@ public class RealtimeService {
     }
 
     /**
+     * 获取单个卡口的实时统计数据
+     * @param checkpointId 卡口ID或Code
+     */
+    public Map<String, Object> getCheckpointStats(String checkpointId) {
+        Map<String, Object> stats = new HashMap<>();
+
+        LocalDateTime simNow = timeService.getSimulatedTime();
+        LocalDateTime dayStart = simNow.toLocalDate().atStartOfDay();
+        LocalDateTime hourStart = simNow.minusHours(1);
+
+        // 今日通行量
+        Long todayTotal = passRecordRepository.countByCheckpointIdInRange(checkpointId, dayStart, simNow);
+        // 最近1小时通行量（用于计算实时车流）
+        Long hourlyCount = passRecordRepository.countByCheckpointIdInRange(checkpointId, hourStart, simNow);
+        // 本地/外地车辆
+        Long localCount = passRecordRepository.countLocalByCheckpointIdInRange(checkpointId, dayStart, simNow);
+        Long foreignCount = passRecordRepository.countForeignByCheckpointIdInRange(checkpointId, dayStart, simNow);
+
+        long today = todayTotal != null ? todayTotal : 0L;
+        long hourly = hourlyCount != null ? hourlyCount : 0L;
+        long localVehicles = localCount != null ? localCount : 0L;
+        long foreignVehicles = foreignCount != null ? foreignCount : 0L;
+
+        // 计算状态：根据小时流量判断拥堵程度
+        String status = "normal";
+        if (hourly > 200) {
+            status = "congested";
+        } else if (hourly > 100) {
+            status = "busy";
+        }
+
+        stats.put("checkpointId", checkpointId);
+        stats.put("todayTotal", today);
+        stats.put("hourlyFlow", hourly);
+        stats.put("localCount", localVehicles);
+        stats.put("foreignCount", foreignVehicles);
+        stats.put("localRate", today > 0 ? Math.round(localVehicles * 100.0 / today) : 0);
+        stats.put("foreignRate", today > 0 ? Math.round(foreignVehicles * 100.0 / today) : 0);
+        stats.put("status", status);
+
+        return stats;
+    }
+
+    /**
+     * 获取区域热度排名统计
+     * 按行政区划统计通行量并排名，对比前一时段计算趋势
+     * @param timeRange "hour" 表示最近1小时，"day" 表示今日累计
+     */
+    public List<Map<String, Object>> getRegionHeatStats(String timeRange) {
+        LocalDateTime simNow = timeService.getSimulatedTime();
+        LocalDateTime currentStart;
+        LocalDateTime prevStart;
+        LocalDateTime prevEnd;
+
+        if ("hour".equalsIgnoreCase(timeRange)) {
+            // 最近1小时 vs 前1小时
+            currentStart = simNow.minusHours(1);
+            prevStart = simNow.minusHours(2);
+            prevEnd = simNow.minusHours(1);
+        } else {
+            // 今日累计 vs 昨日同时段
+            currentStart = simNow.toLocalDate().atStartOfDay();
+            prevStart = currentStart.minusDays(1);
+            prevEnd = simNow.minusDays(1);
+        }
+
+        // 当前时段数据
+        List<Object[]> currentResults = passRecordRepository.countByRegionInRange(currentStart, simNow);
+
+        // 前一时段数据（用于计算趋势）
+        List<Object[]> prevResults = passRecordRepository.countByRegionInRange(prevStart, prevEnd);
+
+        // 区域名称规范化映射（处理可能的数据不一致）
+        Map<String, String> regionNormalize = Map.of(
+            "睢宁", "睢宁县",
+            "铜山", "铜山区",
+            "沛", "沛县",
+            "新沂", "新沂市",
+            "邳州", "邳州市",
+            "贾汪", "贾汪区"
+        );
+
+        // 构建前一时段数据映射
+        Map<String, Long> prevMap = new HashMap<>();
+        for (Object[] row : prevResults) {
+            if (row[0] != null) {
+                String region = normalizeRegionName(String.valueOf(row[0]), regionNormalize);
+                long count = ((Number) row[1]).longValue();
+                prevMap.merge(region, count, Long::sum);
+            }
+        }
+
+        return currentResults.stream()
+            .filter(row -> row[0] != null)
+            .map(row -> {
+                String region = normalizeRegionName(String.valueOf(row[0]), regionNormalize);
+                long count = ((Number) row[1]).longValue();
+                
+                // 计算趋势：(当前 - 前一时段) / 前一时段 * 100，取整
+                long prevCount = prevMap.getOrDefault(region, 0L);
+                int trend = 0;
+                if (prevCount > 0) {
+                    trend = (int) Math.round((count - prevCount) * 100.0 / prevCount);
+                } else if (count > 0) {
+                    trend = 100; // 前一时段无数据，当前有数据，视为100%增长
+                }
+                
+                Map<String, Object> item = new HashMap<>();
+                item.put("region", region);
+                item.put("count", count);
+                item.put("trend", trend);
+                return item;
+            })
+            .toList();
+    }
+
+    /**
+     * 规范化区域名称
+     */
+    private String normalizeRegionName(String region, Map<String, String> normalizeMap) {
+        for (Map.Entry<String, String> entry : normalizeMap.entrySet()) {
+            if (region.contains(entry.getKey())) {
+                return entry.getValue();
+            }
+        }
+        return region;
+    }
+
+    /**
      * 获取套牌车检测列表
      */
     public Page<ClonePlateDetection> getClonePlates(String status, String plateNumber, LocalDateTime startTime, LocalDateTime endTime, int page, int size) {
@@ -217,6 +346,65 @@ public class RealtimeService {
 	                                    "suggestion", suggestion);
                         })
                 .toList();
+    }
+
+    /**
+     * 检测车流量高峰告警 - 返回超过阈值的卡口列表
+     * @param threshold 阈值比例（0-1），默认0.7表示超过最大容量70%时触发告警
+     */
+    public Map<String, Object> detectFlowAlerts(double threshold) {
+        Map<String, Long> flowPerHour = getCheckpointFlowPerHour();
+        List<Checkpoint> checkpoints = checkpointRepository.findAll();
+        LocalDateTime simNow = timeService.getSimulatedTime();
+
+        // 筛选超过阈值的卡口
+        List<Map<String, Object>> alerts = checkpoints.stream()
+                .map(cp -> {
+                    long currentFlow = flowPerHour.getOrDefault(cp.getCode(), 0L);
+                    int maxCapacity = cp.getLaneCount() != null ? cp.getLaneCount() * 800 : 3200;
+                    double ratio = maxCapacity <= 0 ? 0 : (double) currentFlow / (double) maxCapacity;
+                    return Map.of(
+                            "checkpoint", cp,
+                            "currentFlow", currentFlow,
+                            "maxCapacity", maxCapacity,
+                            "ratio", ratio
+                    );
+                })
+                .filter(m -> (double) m.get("ratio") >= threshold)
+                .map(m -> {
+                    Checkpoint cp = (Checkpoint) m.get("checkpoint");
+                    long currentFlow = (long) m.get("currentFlow");
+                    int maxCapacity = (int) m.get("maxCapacity");
+                    double ratio = (double) m.get("ratio");
+                    
+                    String level = ratio >= 0.9 ? "critical" : (ratio >= 0.8 ? "danger" : "warning");
+                    String message = String.format("%s 车流量达到 %d%%，当前 %d 辆/小时，建议及时分流",
+                            CheckpointCatalog.displayName(cp.getCode(), cp.getName()),
+                            Math.round(ratio * 100),
+                            currentFlow);
+                    
+                    return Map.<String, Object>of(
+                            "id", "pressure_" + cp.getId() + "_" + System.currentTimeMillis(),
+                            "checkpointId", cp.getCode(),
+                            "checkpointName", CheckpointCatalog.displayName(cp.getCode(), cp.getName()),
+                            "type", "pressure",
+                            "level", level,
+                            "currentFlow", currentFlow,
+                            "maxCapacity", maxCapacity,
+                            "ratio", Math.round(ratio * 100),
+                            "message", message,
+                            "time", simNow.toString()
+                    );
+                })
+                .sorted((a, b) -> Long.compare((long) b.get("currentFlow"), (long) a.get("currentFlow")))
+                .toList();
+
+        return Map.of(
+                "hasAlerts", !alerts.isEmpty(),
+                "alertCount", alerts.size(),
+                "alerts", alerts,
+                "checkTime", simNow.toString()
+        );
     }
 
     /**

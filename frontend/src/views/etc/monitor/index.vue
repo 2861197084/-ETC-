@@ -37,7 +37,7 @@
       <!-- 左侧面板 -->
       <div class="left-panel">
         <BloomStats :local-count="bloomData.local" :foreign-count="bloomData.foreign" />
-        <RegionRank :data="regionRankData" />
+        <RegionRank :data="regionRankData" @time-range-change="handleRegionTimeRangeChange" />
       </div>
 
       <!-- 中央地图区域 - 徐州实时路况 -->
@@ -138,9 +138,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+import { ElMessage, ElNotification } from 'element-plus'
 import { Sunny, Van, Money, Odometer, Connection, Warning, Refresh } from '@element-plus/icons-vue'
 import { XuzhouTrafficMap, BloomStats, RegionRank, AlertTicker, ClonePlateAlert } from '@/components/business/etc'
-import { getDailyStats, getViolations, getClonePlates, getVehicleSourceStats } from '@/api/admin/realtime'
+import { getDailyStats, getViolations, getClonePlates, getVehicleSourceStats, getRegionHeatStats, getFlowAlerts } from '@/api/admin/realtime'
 import { getCheckpoints } from '@/api/admin/map'
 import { useSimulatedClock } from '@/hooks/core/useSimulatedClock'
 
@@ -150,7 +151,7 @@ defineOptions({ name: 'EtcMonitor' })
 const mapRef = ref()
 
 // 当前时间
-const { timeText: currentTime, dateText: currentDate } = useSimulatedClock({ autoStart: true })
+const { timeText: currentTime, dateText: currentDate, simulatedDate } = useSimulatedClock({ autoStart: true })
 
 // 选中的收费站
 const selectedStation = ref<any>(null)
@@ -164,8 +165,8 @@ const bloomData = ref({
 // 区域排名数据
 const regionRankData = ref<{ region: string; count: number; trend: number }[]>([])
 
-// 告警列表
-const alertList = ref<{ id: string; type: 'overspeed' | 'duplicate' | 'dispatch' | 'illegal'; message: string; plate: string; time: string; speed?: number }[]>([])
+// 告警列表 - 支持压力告警类型
+const alertList = ref<{ id: string; type: 'overspeed' | 'duplicate' | 'dispatch' | 'illegal' | 'pressure'; message: string; plate: string; time: string; speed?: number }[]>([])
 
 // 底部指标数据
 const metrics = ref({
@@ -199,41 +200,32 @@ const loadDailyStats = async () => {
   }
 }
 
-// 加载区域排名
-const loadRegionRank = async () => {
+// 当前区域热度时间范围
+const regionTimeRange = ref<'hour' | 'day'>('hour')
+
+// 加载区域排名（真实数据）
+const loadRegionRank = async (timeRange: 'hour' | 'day' = regionTimeRange.value) => {
   try {
-    console.log('🔄 开始加载区域排名...')
-    const res = await getCheckpoints()
-    console.log('🗺️ 卡口数据响应:', res)
+    console.log('🔄 开始加载区域热度排名...', timeRange)
+    const res = await getRegionHeatStats(timeRange)
+    console.log('📊 区域热度响应:', res)
     if (res.code === 200 && res.data) {
-      // 卡口ID到区域名称的映射（解决后端中文乱码）
-      const regionByCheckpointId: Record<number, string> = {
-        1: '睢宁县', 2: '铜山区', 3: '铜山区', 4: '睢宁县', 5: '沛县', 6: '新沂市',
-        7: '沛县', 8: '邳州市', 9: '贾汪区', 10: '邳州市', 11: '邳州市', 12: '新沂市',
-        13: '邳州市', 14: '邳州市', 15: '铜山区', 16: '铜山区', 17: '睢宁县',
-        18: '睢宁县', 19: '睢宁县'
-      }
-      
-      // 按区域分组统计流量
-      const regionMap = new Map<string, number>()
-      res.data.forEach((cp: any) => {
-        const region = regionByCheckpointId[cp.id] || '其他'
-        regionMap.set(region, (regionMap.get(region) || 0) + (cp.currentFlow || 0))
-      })
-      // 转为数组并排序
-      regionRankData.value = Array.from(regionMap.entries())
-        .map(([region, count]) => ({
-          region,
-          count,
-          trend: Math.floor(Math.random() * 20) - 10 // 暂用随机趋势
-        }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 10)
+      regionRankData.value = res.data.map((item: any) => ({
+        region: item.region || '未知',
+        count: item.count || 0,
+        trend: item.trend || 0
+      }))
       console.log('📊 区域排名:', regionRankData.value)
     }
   } catch (e) {
     console.error('加载区域排名失败:', e)
   }
+}
+
+// 区域热度时间范围切换处理
+const handleRegionTimeRangeChange = (timeRange: 'hour' | 'day') => {
+  regionTimeRange.value = timeRange
+  loadRegionRank(timeRange)
 }
 
 // 加载车辆来源统计（本地/外地）
@@ -253,16 +245,36 @@ const loadVehicleSource = async () => {
   }
 }
 
-// 加载告警数据
+// 加载告警数据 - 获取今日全部告警（违规 + 套牌 + 压力告警）
 const loadAlerts = async () => {
   try {
-    // 获取违规信息
-    const [violationsRes, clonePlatesRes] = await Promise.all([
-      getViolations({ pageSize: 5 }),
-      getClonePlates({ pageSize: 3 })
+    // 获取模拟时间的今日开始时间
+    const simTime = simulatedDate.value || new Date()
+    const todayStart = new Date(simTime)
+    todayStart.setHours(0, 0, 0, 0)
+    const startTimeStr = todayStart.toISOString()
+
+    // 并行获取今日全部告警（pageSize设大以获取全部）
+    const [violationsRes, clonePlatesRes, flowAlertsRes] = await Promise.all([
+      getViolations({ startTime: startTimeStr, pageSize: 100 }),
+      getClonePlates({ startTime: startTimeStr, pageSize: 100 }),
+      getFlowAlerts(0.5) // 阈值50%，较低以显示更多告警
     ])
     
     const alerts: typeof alertList.value = []
+    
+    // 处理压力告警（优先级最高）
+    if (flowAlertsRes.code === 200 && flowAlertsRes.data?.alerts) {
+      flowAlertsRes.data.alerts.forEach((p: any) => {
+        alerts.push({
+          id: p.id,
+          type: 'pressure',
+          message: p.message || `${p.checkpointName} 车流量高峰`,
+          plate: p.checkpointName || '未知卡口',
+          time: p.time ? new Date(p.time).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '--:--'
+        })
+      })
+    }
     
     // 处理违规信息
     if (violationsRes.code === 200 && violationsRes.data?.list) {
@@ -291,10 +303,53 @@ const loadAlerts = async () => {
       })
     }
     
-    alertList.value = alerts.slice(0, 8)
+    // 保留今日全部告警，不再截断
+    alertList.value = alerts
+    console.log('📢 今日告警数量:', alerts.length)
   } catch (e) {
     console.error('加载告警失败:', e)
   }
+}
+
+// 车流量高峰检测 - 超过阈值时弹窗提示
+// TODO: 暂时禁用，避免历史数据导致持续弹窗
+const checkFlowAlerts = async () => {
+  // 暂时禁用
+  return
+  /*
+  try {
+    const res = await getFlowAlerts(0.7) // 阈值70%触发弹窗
+    if (res.code === 200 && res.data?.hasAlerts && res.data.alerts.length > 0) {
+      // 有告警，显示弹窗
+      const criticalAlerts = res.data.alerts.filter((a: any) => a.level === 'critical' || a.level === 'danger')
+      const warningAlerts = res.data.alerts.filter((a: any) => a.level === 'warning')
+      
+      if (criticalAlerts.length > 0) {
+        // 危险级别 - 使用 Notification 弹窗
+        ElNotification({
+          title: '⚠️ 车流量高峰预警',
+          message: criticalAlerts.map((a: any) => a.message).join('\n'),
+          type: 'error',
+          duration: 8000,
+          position: 'top-right'
+        })
+      } else if (warningAlerts.length > 0) {
+        // 警告级别 - 使用较轻的提示
+        ElNotification({
+          title: '📊 车流量提醒',
+          message: warningAlerts.map((a: any) => a.message).join('\n'),
+          type: 'warning',
+          duration: 5000,
+          position: 'top-right'
+        })
+      }
+      
+      console.log('🚨 车流量高峰检测:', res.data.alertCount, '个卡口超过阈值')
+    }
+  } catch (e) {
+    console.error('车流量检测失败:', e)
+  }
+  */
 }
 
 // 格式化数字
@@ -339,6 +394,8 @@ const loadAllData = async () => {
     loadVehicleSource(),
     loadAlerts()
   ])
+  // 每次刷新后检测车流量高峰
+  checkFlowAlerts()
 }
 
 // 手动刷新
@@ -358,11 +415,11 @@ defineExpose({ refresh: handleManualRefresh })
 
 onMounted(() => {
   loadAllData()
-  // 每12秒自动刷新数据（系统内12秒 = 模拟1小时）
+  // 每5秒自动刷新数据（实时模式）
   dataTimer = window.setInterval(() => {
-    console.log('⏰ 自动刷新数据大屏 (12s interval)')
+    console.log('⏰ 自动刷新数据大屏 (5s interval)')
     loadAllData()
-  }, 12000)
+  }, 5000)
 })
 
 onUnmounted(() => {

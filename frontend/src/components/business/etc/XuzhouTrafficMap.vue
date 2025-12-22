@@ -110,6 +110,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import AMapLoader from '@amap/amap-jsapi-loader'
 import { checkpoints as staticCheckpoints, mapCenter, defaultZoom, type Checkpoint } from '@/config/checkpoints'
 import { getCheckpoints } from '@/api/admin/map'
+import { getCheckpointStats } from '@/api/admin/realtime'
 
 defineOptions({ name: 'XuzhouTrafficMap' })
 
@@ -398,7 +399,7 @@ const initMap = async () => {
 }
 
 // 生成信息窗体HTML内容
-const generateInfoWindowContent = (checkpoint: CheckpointDisplayData) => {
+const generateInfoWindowContent = (checkpoint: CheckpointDisplayData, loading = false, stats?: any) => {
   const statusLabels: Record<string, string> = {
     normal: '正常',
     busy: '繁忙',
@@ -406,12 +407,53 @@ const generateInfoWindowContent = (checkpoint: CheckpointDisplayData) => {
   }
   const statusClass = checkpoint.status || 'normal'
   
+  // 加载中状态
+  if (loading) {
+    return `
+      <div class="checkpoint-info-window" style="
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+        min-width: 220px;
+        overflow: hidden;
+        border: 1px solid #e4e7ed;
+      ">
+        <div style="
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 12px 14px;
+          background: linear-gradient(135deg, ${checkpointConfig.color}22, ${checkpointConfig.color}11);
+          border-bottom: 1px solid #e4e7ed;
+        ">
+          <span style="font-size: 14px; font-weight: 600; color: #303133;">${checkpoint.name}</span>
+          <span style="
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: ${checkpointConfig.color}22;
+            color: ${checkpointConfig.color};
+            font-weight: 500;
+          ">出市卡口</span>
+        </div>
+        <div style="padding: 20px 14px; text-align: center; color: #909399;">
+          <span>加载中...</span>
+        </div>
+      </div>
+    `
+  }
+  
+  // 有详细统计数据时显示更多信息
+  const localRate = stats?.localRate ?? 0
+  const foreignRate = stats?.foreignRate ?? 0
+  const hasStats = stats !== undefined
+  
   return `
     <div class="checkpoint-info-window" style="
       background: #fff;
       border-radius: 8px;
       box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-      min-width: 220px;
+      min-width: 240px;
       overflow: hidden;
       border: 1px solid #e4e7ed;
     ">
@@ -435,16 +477,25 @@ const generateInfoWindowContent = (checkpoint: CheckpointDisplayData) => {
       </div>
       <div style="padding: 12px 14px;">
         <div style="font-size: 11px; color: #909399; margin-bottom: 8px; line-height: 1.4;">
-          📍 ${checkpoint.region} · ${checkpoint.road} · ${checkpoint.boundary}
+          📍 ${checkpoint.region} · ${checkpoint.road || ''}
         </div>
         <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f0f0f0;">
-          <span style="font-size: 12px; color: #909399;">实时车流</span>
-          <span style="font-size: 13px; color: #303133; font-weight: 600;">${checkpoint.flow || 0} <small style="font-weight:normal;color:#909399">辆/时</small></span>
+          <span style="font-size: 12px; color: #909399;">实时车流(1h)</span>
+          <span style="font-size: 13px; color: #303133; font-weight: 600;">${checkpoint.flow || 0} <small style="font-weight:normal;color:#909399">辆</small></span>
         </div>
         <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f0f0f0;">
           <span style="font-size: 12px; color: #909399;">今日通行</span>
           <span style="font-size: 13px; color: #303133; font-weight: 600;">${(checkpoint.todayTotal || 0).toLocaleString()} <small style="font-weight:normal;color:#909399">辆</small></span>
         </div>
+        ${hasStats ? `
+        <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f0f0f0;">
+          <span style="font-size: 12px; color: #909399;">本地/外地</span>
+          <span style="font-size: 12px; color: #303133;">
+            <span style="color: #67C23A; font-weight: 500;">${localRate}%</span> / 
+            <span style="color: #E6A23C; font-weight: 500;">${foreignRate}%</span>
+          </span>
+        </div>
+        ` : ''}
         <div style="display: flex; justify-content: space-between; padding: 6px 0;">
           <span style="font-size: 12px; color: #909399;">通行状态</span>
           <span style="
@@ -474,18 +525,51 @@ const addCheckpointMarkers = () => {
       title: checkpoint.name
     })
 
-    // 点击事件
-    marker.on('click', (e: any) => {
+    // 点击事件 - 调用后端获取真实统计数据
+    marker.on('click', async (e: any) => {
       e.stopPropagation && e.stopPropagation()
       
       const cpData = marker.getExtData() as CheckpointDisplayData
       selectedCheckpointInfo.value = cpData
       emit('checkpoint-click', cpData)
       
+      // 先显示加载中的信息窗口
       if (infoWindow) {
-        const content = generateInfoWindowContent(cpData)
-        infoWindow.setContent(content)
+        const loadingContent = generateInfoWindowContent({
+          ...cpData,
+          flow: undefined,
+          todayTotal: undefined,
+          status: 'normal'
+        }, true)
+        infoWindow.setContent(loadingContent)
         infoWindow.open(map, marker.getPosition())
+      }
+      
+      // 调用后端获取真实统计数据
+      try {
+        // checkpoint_id 在数据库中是 CP001 格式，需要保持一致
+        const idStr = String(cpData.id)
+        const checkpointId = idStr.startsWith('CP') ? idStr : `CP${idStr.padStart(3, '0')}`
+        console.log('📊 获取卡口统计:', checkpointId)
+        const res = await getCheckpointStats(checkpointId)
+        if (res.code === 200 && res.data) {
+          const statsData = res.data
+          // 更新显示数据
+          const updatedCpData: CheckpointDisplayData = {
+            ...cpData,
+            flow: statsData.hourlyFlow,
+            todayTotal: statsData.todayTotal,
+            status: statsData.status as 'normal' | 'busy' | 'congested'
+          }
+          selectedCheckpointInfo.value = updatedCpData
+          // 更新信息窗口内容
+          if (infoWindow) {
+            const content = generateInfoWindowContent(updatedCpData, false, statsData)
+            infoWindow.setContent(content)
+          }
+        }
+      } catch (err) {
+        console.error('获取卡口统计数据失败:', err)
       }
     })
 

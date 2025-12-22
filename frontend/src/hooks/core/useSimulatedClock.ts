@@ -1,12 +1,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { getTimeStatus, startSimulation, type TimeStatus } from '@/api/time'
+import { getTimeStatus, type TimeStatus } from '@/api/time'
 
 type SimulatedClockOptions = {
-  /**
-   * 自动启动模拟时间（若后端当前为暂停状态）
-   * 默认: true
-   */
-  autoStart?: boolean
   /**
    * 本地 UI 刷新间隔（毫秒）
    * 默认: 1000
@@ -14,7 +9,7 @@ type SimulatedClockOptions = {
   tickIntervalMs?: number
   /**
    * 与后端重新对时的间隔（毫秒）
-   * 默认: 30000
+   * 默认: 5000（实时模式下5秒同步一次）
    */
   resyncIntervalMs?: number
 }
@@ -36,11 +31,11 @@ const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
 })
 
 export function useSimulatedClock(options: SimulatedClockOptions = {}) {
-  const { autoStart = true, tickIntervalMs = 1000, resyncIntervalMs = 30000 } = options
+  const { tickIntervalMs = 1000, resyncIntervalMs = 5000 } = options
 
   const status = ref<TimeStatus | null>(null)
-  const isRunning = ref(false)
-  const timeScale = ref(300)
+  const isRunning = ref(true) // 实时模式始终运行
+  const timeScale = ref(1) // 实时模式 1:1
 
   const baseRealMs = ref(0)
   const baseSimulatedMs = ref(0)
@@ -51,22 +46,14 @@ export function useSimulatedClock(options: SimulatedClockOptions = {}) {
 
   function applyStatus(next: TimeStatus) {
     status.value = next
-    isRunning.value = !!next.isRunning
-    timeScale.value = next.timeScale ?? 300
+    isRunning.value = true // 始终运行
+    timeScale.value = next.timeScale ?? 1
     baseRealMs.value = Date.now()
     baseSimulatedMs.value = next.simulatedTimestamp
   }
 
   async function syncFromServer() {
     const res = await getTimeStatus()
-    if (res.code === 200 && res.data) applyStatus(res.data)
-  }
-
-  async function ensureRunning() {
-    await syncFromServer()
-    if (!autoStart || isRunning.value) return
-
-    const res = await startSimulation()
     if (res.code === 200 && res.data) applyStatus(res.data)
   }
 
@@ -86,7 +73,7 @@ export function useSimulatedClock(options: SimulatedClockOptions = {}) {
   const dateText = computed(() => (simulatedDate.value ? dateFormatter.format(simulatedDate.value) : ''))
 
   onMounted(() => {
-    ensureRunning().catch(() => {})
+    syncFromServer().catch(() => {})
     tickTimer = window.setInterval(() => {
       nowMs.value = Date.now()
     }, tickIntervalMs)
@@ -108,8 +95,7 @@ export function useSimulatedClock(options: SimulatedClockOptions = {}) {
     simulatedDate,
     timeText,
     dateText,
-    syncFromServer,
-    ensureRunning
+    syncFromServer
   }
 }
 

@@ -140,12 +140,18 @@ services:
         blob.server.port: 6124
         taskmanager.numberOfTaskSlots: 3
         parallelism.default: 1
-        jobmanager.memory.process.size: 768m
+        jobmanager.memory.process.size: 1024m
+        state.backend: hashmap
+        state.checkpoints.dir: file:///tmp/flink-checkpoints
+        state.savepoints.dir: file:///tmp/flink-savepoints
+        execution.checkpointing.interval: 60000
     depends_on:
       kafka:
         condition: service_healthy
     volumes:
       - ./flink-jobs/target:/opt/flink/jobs:ro
+      - flink-checkpoints:/tmp/flink-checkpoints
+      - flink-savepoints:/tmp/flink-savepoints
 
   flink-taskmanager:
     build:
@@ -161,9 +167,15 @@ services:
         blob.server.port: 6124
         taskmanager.numberOfTaskSlots: 3
         parallelism.default: 1
-        taskmanager.memory.process.size: 1024m
+        taskmanager.memory.process.size: 2048m
+        state.backend: hashmap
+        state.checkpoints.dir: file:///tmp/flink-checkpoints
+        state.savepoints.dir: file:///tmp/flink-savepoints
     depends_on:
       - flink-jobmanager
+    volumes:
+      - flink-checkpoints:/tmp/flink-checkpoints
+      - flink-savepoints:/tmp/flink-savepoints
 
   hbase:
     build:
@@ -309,3 +321,5 @@ volumes:
   hbase-data:
   spark-data:
   trino-data:
+  flink-checkpoints:
+  flink-savepoints:

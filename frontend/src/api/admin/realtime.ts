@@ -74,6 +74,55 @@ export function getVehicleSourceStats() {
 }
 
 /**
+ * 获取区域热度排名统计
+ * @param timeRange 'hour' 最近1小时，'day' 今日累计
+ */
+export function getRegionHeatStats(timeRange: 'hour' | 'day' = 'hour') {
+  return http.get<{ region: string; count: number; trend: number }[]>('/admin/realtime/region-heat', { timeRange })
+}
+
+/**
+ * 获取单个卡口的实时统计数据
+ * @param checkpointId 卡口ID或Code
+ */
+export function getCheckpointStats(checkpointId: string) {
+  return http.get<{
+    checkpointId: string
+    todayTotal: number
+    hourlyFlow: number
+    localCount: number
+    foreignCount: number
+    localRate: number
+    foreignRate: number
+    status: 'normal' | 'busy' | 'congested'
+  }>(`/admin/realtime/checkpoint/${checkpointId}/stats`)
+}
+
+/**
+ * 车流量高峰检测 - 返回超过阈值的卡口告警
+ * @param threshold 阈值比例（0-1），默认0.7表示超过最大容量70%时触发告警
+ */
+export function getFlowAlerts(threshold = 0.7) {
+  return http.get<{
+    hasAlerts: boolean
+    alertCount: number
+    alerts: Array<{
+      id: string
+      checkpointId: string
+      checkpointName: string
+      type: 'pressure'
+      level: 'warning' | 'danger' | 'critical'
+      currentFlow: number
+      maxCapacity: number
+      ratio: number
+      message: string
+      time: string
+    }>
+    checkTime: string
+  }>('/admin/realtime/flow-alerts', { threshold })
+}
+
+/**
  * 获取实时流量数据（WebSocket 连接前获取初始数据）
  */
 export function getRealtimeFlow() {

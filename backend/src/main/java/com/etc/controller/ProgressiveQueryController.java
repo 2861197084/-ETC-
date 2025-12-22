@@ -39,6 +39,7 @@ public class ProgressiveQueryController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> queryRecords(
             @RequestParam(required = false) String plateNumber,
             @RequestParam(required = false) String checkpointId,
+            @RequestParam(required = false) String direction,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime,
             @RequestParam(defaultValue = "mysql") String source,
@@ -50,56 +51,25 @@ public class ProgressiveQueryController {
 
         if ("hbase".equalsIgnoreCase(source)) {
             HBasePassRecordService.QueryResult r = hbasePassRecordService.query(
-                    plateNumber, checkpointId, startTime, endTime, lastRowKey, size);
+                    plateNumber, checkpointId, direction, startTime, endTime, lastRowKey, page, size);
             
-            // 判断是否有筛选条件
-            boolean hasFilters = (plateNumber != null && !plateNumber.isBlank()) 
-                    || (checkpointId != null && !checkpointId.isBlank());
-            
-            // 从 Redis 缓存获取统计数据
-            long totalCount = -1;
-            boolean statsCached = false;
-            
-            if (!hasFilters && startTime != null && endTime != null) {
-                // 无筛选条件，尝试从缓存获取精确计数
-                LocalDate startDate = startTime.toLocalDate();
-                LocalDate endDate = endTime.toLocalDate();
-                HBaseStatsService.StatsResult stats = hbaseStatsService.getFilteredStats(
-                        startDate, endDate, null, null);
-                totalCount = stats.count();
-                statsCached = stats.isCached();
-            } else if (hasFilters && startTime != null && endTime != null) {
-                // 有收费站筛选，尝试获取筛选后的统计
-                LocalDate startDate = startTime.toLocalDate();
-                LocalDate endDate = endTime.toLocalDate();
-                HBaseStatsService.StatsResult stats = hbaseStatsService.getFilteredStats(
-                        startDate, endDate, checkpointId, null);
-                totalCount = stats.count();
-                statsCached = stats.isCached();
-            }
-            
-            // 如果缓存未命中，使用组合总数
-            if (totalCount < 0 && !hasFilters) {
-                totalCount = statsReadService.getCombinedTotal();
-            }
+            // 使用 HBase 扫描返回的精确总数
+            long totalCount = r.total();
             
             Map<String, Object> data = new HashMap<>();
             data.put("source", "hbase");
             data.put("list", r.list());
-            data.put("mysqlTotal", statsReadService.getMysql7dTotal());
-            data.put("totalCount", totalCount);
-            data.put("hasFilters", hasFilters);
-            data.put("statsCached", statsCached);
-            data.put("hasMoreHistory", r.hasMoreHistory());
-            data.put("current", page);
+            data.put("total", totalCount);
+            data.put("page", page);
             data.put("size", size);
+            data.put("hasMoreHistory", r.hasMoreHistory());
             data.put("nextRowKey", r.nextRowKey());
             data.put("queryTimeMs", r.queryTimeMs());
             return ResponseEntity.ok(ApiResponse.success(data));
         }
 
         // 默认走 MySQL（7天热数据）
-        Page<PassRecord> result = queryService.search(plateNumber, checkpointId, startTime, endTime, null, page, size);
+        Page<PassRecord> result = queryService.search(plateNumber, checkpointId, startTime, endTime, direction, page, size);
 
         List<Map<String, Object>> list = result.getContent().stream()
                 .map(r -> {
@@ -141,7 +111,7 @@ public class ProgressiveQueryController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return queryRecords(plateNumber, null, null, null, source, lastRowKey, page, size);
+        return queryRecords(plateNumber, null, null, null, null, source, lastRowKey, page, size);
     }
 
     @GetMapping("/records/by-checkpoint")
@@ -153,6 +123,6 @@ public class ProgressiveQueryController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return queryRecords(null, checkpointId, null, null, source, lastRowKey, page, size);
+        return queryRecords(null, checkpointId, null, null, null, source, lastRowKey, page, size);
     }
 }

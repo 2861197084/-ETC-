@@ -40,7 +40,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { TrendCharts, CaretTop, CaretBottom } from '@element-plus/icons-vue'
 
 defineOptions({ name: 'RegionRank' })
@@ -59,7 +59,16 @@ const props = withDefaults(defineProps<Props>(), {
   data: () => []
 })
 
+const emit = defineEmits<{
+  (e: 'timeRangeChange', value: 'hour' | 'day'): void
+}>()
+
 const timeRange = ref<'hour' | 'day'>('hour')
+
+// 监听时间范围变化，通知父组件重新加载数据
+watch(timeRange, (newVal) => {
+  emit('timeRangeChange', newVal)
+})
 
 const rankData = computed(() => {
   return [...props.data].sort((a, b) => b.count - a.count).slice(0, 10)
