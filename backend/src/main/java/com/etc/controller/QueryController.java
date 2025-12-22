@@ -31,10 +31,12 @@ public class QueryController {
             @RequestParam(required = false) String checkpointId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime,
+            @RequestParam(required = false) String direction,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int pageSize) {
+        // direction: "1"=进城, "2"=出城，直接与数据库 fxlx 字段匹配
         Page<PassRecord> result =
-                queryService.search(plateNumber, checkpointId, startTime, endTime, page, pageSize);
+                queryService.search(plateNumber, checkpointId, startTime, endTime, direction, page, pageSize);
 
         // 转换为前端需要的格式
         List<Map<String, Object>> list = result.getContent().stream()
@@ -45,7 +47,9 @@ public class QueryController {
                     map.put("checkpointName", r.getKkmc());
                     map.put("checkpointId", r.getCheckpointId());
                     map.put("passTime", r.getGcsj());
-                    map.put("direction", r.getFxlx());
+                    // 将数据库中的 1/2 映射为 进城/出城
+                    String directionText = "1".equals(r.getFxlx()) ? "进城" : "2".equals(r.getFxlx()) ? "出城" : r.getFxlx();
+                    map.put("direction", directionText);
                     map.put("vehicleType", r.getClppxh());
                     map.put("plateType", r.getHpzl());
                     map.put("district", r.getXzqhmc());

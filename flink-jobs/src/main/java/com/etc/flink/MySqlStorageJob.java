@@ -81,9 +81,11 @@ public class MySqlStorageJob {
     }
 
     private static org.apache.flink.streaming.api.functions.sink.SinkFunction<PassRecordWithHash> buildSink(String table) {
+        // 使用 ON DUPLICATE KEY UPDATE 实现幂等写入，避免重复数据
         String sql = "INSERT INTO " + table +
                 " (gcxh, xzqhmc, kkmc, fxlx, gcsj, hpzl, hp, clppxh, plate_hash, checkpoint_id) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+                "ON DUPLICATE KEY UPDATE gcsj = VALUES(gcsj)";
 
         return JdbcSink.sink(
                 sql,

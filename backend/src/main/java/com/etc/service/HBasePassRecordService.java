@@ -31,7 +31,8 @@ import static org.apache.hadoop.hbase.CompareOperator.*;
 public class HBasePassRecordService {
 
     private static final byte[] CF = Bytes.toBytes("d");
-    private static final DateTimeFormatter GCSJ_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    // HBase 数据中的实际格式: 2023/12/1 16:36:19 (斜杠分隔，无前导零)
+    private static final DateTimeFormatter GCSJ_FORMATTER = DateTimeFormatter.ofPattern("yyyy/M/d H:mm:ss");
 
     private final Connection connection;
 

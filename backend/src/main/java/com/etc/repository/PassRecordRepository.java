@@ -32,12 +32,14 @@ public interface PassRecordRepository extends JpaRepository<PassRecord, Long> {
             "(:plate IS NULL OR p.hp LIKE %:plate%) AND " +
             "(:checkpointId IS NULL OR p.checkpointId = :checkpointId) AND " +
             "(:startTime IS NULL OR p.gcsj >= :startTime) AND " +
-            "(:endTime IS NULL OR p.gcsj <= :endTime)")
+            "(:endTime IS NULL OR p.gcsj <= :endTime) AND " +
+            "(:direction IS NULL OR p.fxlx = :direction)")
     Page<PassRecord> search(
             @Param("plate") String plate,
             @Param("checkpointId") String checkpointId,
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime,
+            @Param("direction") String direction,
             Pageable pageable);
 
     @Query("SELECT COUNT(p) FROM PassRecord p WHERE DATE(p.gcsj) = CURRENT_DATE")

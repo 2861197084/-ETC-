@@ -62,7 +62,7 @@ public class ProgressiveQueryController {
         }
 
         // 默认走 MySQL（7天热数据）
-        Page<PassRecord> result = queryService.search(plateNumber, checkpointId, startTime, endTime, page, size);
+        Page<PassRecord> result = queryService.search(plateNumber, checkpointId, startTime, endTime, null, page, size);
 
         List<Map<String, Object>> list = result.getContent().stream()
                 .map(r -> {

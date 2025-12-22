@@ -73,18 +73,8 @@
               <!-- 通行方向 - 车流量统计 -->
               <el-form-item label="通行方向" v-if="queryType === 'traffic'">
                 <el-select v-model="filters.direction" placeholder="全部方向" clearable style="width: 120px">
-                  <el-option label="进城" value="进城" />
-                  <el-option label="出城" value="出城" />
-                </el-select>
-              </el-form-item>
-
-              <!-- 统计维度 - 车流量统计 -->
-              <el-form-item label="统计维度" v-if="queryType === 'traffic'">
-                <el-select v-model="filters.groupBy" style="width: 140px">
-                  <el-option label="按卡口" value="checkpoint" />
-                  <el-option label="按小时" value="hour" />
-                  <el-option label="按天" value="day" />
-                  <el-option label="按区县" value="region" />
+                  <el-option label="进城" value="1" />
+                  <el-option label="出城" value="2" />
                 </el-select>
               </el-form-item>
 
@@ -210,41 +200,6 @@
           layout="total, sizes, prev, pager, next"
         />
       </div>
-
-      <!-- 渐进式加载：HBase历史数据 -->
-      <div v-if="hbaseData.length > 0" class="hbase-result-section">
-        <div class="hbase-header">
-          <el-tag type="warning">HBase 历史数据</el-tag>
-          <span class="count-info">已加载 {{ hbaseData.length }} 条</span>
-        </div>
-        <el-table :data="hbaseData" stripe border max-height="300">
-          <el-table-column
-            v-for="col in tableColumns"
-            :key="col.prop"
-            :prop="col.prop"
-            :label="col.label"
-            :width="col.width"
-            show-overflow-tooltip
-          />
-        </el-table>
-      </div>
-
-      <!-- 加载更多历史数据按钮 -->
-      <div class="load-more-wrapper">
-        <el-button
-          v-if="hasMoreHbaseData && queryResult.length > 0"
-          type="primary"
-          plain
-          :loading="hbaseLoading"
-          @click="loadMoreHbaseData"
-        >
-          <el-icon v-if="!hbaseLoading"><Download /></el-icon>
-          {{ hbaseLoading ? '加载中...' : '加载更多历史数据 (HBase)' }}
-        </el-button>
-        <span v-else-if="!hasMoreHbaseData && hbaseData.length > 0" class="no-more-text">
-          已加载全部历史数据
-        </span>
-      </div>
     </div>
 
     <!-- 查询历史 -->
@@ -314,14 +269,16 @@ const queryType = ref('traffic')
 const queryLoading = ref(false)
 const text2sqlLoading = ref(false)
 
-// 筛选条件
+// 筛选条件 - 默认时间范围为 HBase 历史数据所在时间（2023-12-01）
 const filters = reactive({
-  dateRange: [] as Date[],
+  dateRange: [
+    new Date('2023-12-01T00:00:00'),
+    new Date('2023-12-02T00:00:00')
+  ] as Date[],
   checkpointId: '',  // 卡口ID（如 CP001）
-  direction: '',     // 通行方向
+  direction: '',     // 通行方向: "1"=进城, "2"=出城
   plateNumber: '',
-  cloneStatus: '',   // 套牌处理状态
-  groupBy: 'checkpoint'
+  cloneStatus: ''    // 套牌处理状态
 })
 
 // 日期快捷选项
@@ -394,8 +351,9 @@ async function loadMoreHbaseData() {
       params.checkpointId = filters.checkpointId
     }
     if (filters.dateRange && filters.dateRange.length === 2) {
-      params.startTime = (filters.dateRange[0] as Date).toISOString()
-      params.endTime = (filters.dateRange[1] as Date).toISOString()
+      // 使用本地时间格式，避免 UTC 时区偏移
+      params.startTime = formatLocalDateTime(filters.dateRange[0] as Date)
+      params.endTime = formatLocalDateTime(filters.dateRange[1] as Date)
     }
 
     const res = await queryRecords(params as Parameters<typeof queryRecords>[0])
@@ -447,23 +405,147 @@ const handleQuickQuery = async () => {
   }
 }
 
+// 格式化本地时间为 ISO 格式（不含时区偏移，避免 UTC 转换问题）
+const formatLocalDateTime = (date: Date): string => {
+  const pad = (n: number) => n.toString().padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}
+
 // 车流量统计查询
 const handleTrafficQuery = async (startTime: number) => {
+  // 判断查询时间范围，决定数据源
+  // 2024-01-01 之前的数据在 HBase，之后的在 MySQL
+  const cutoffDate = new Date('2024-01-01T00:00:00')
+  const queryStartDate = filters.dateRange?.[0] as Date
+  const queryEndDate = filters.dateRange?.[1] as Date
+  
+  const startsBeforeCutoff = queryStartDate && queryStartDate < cutoffDate
+  const endsAfterCutoff = queryEndDate && queryEndDate >= cutoffDate
+  
+  if (startsBeforeCutoff && endsAfterCutoff) {
+    // 跨数据源查询 - 同时查 HBase 和 MySQL
+    console.log('🔀 跨数据源查询 (HBase + MySQL)...')
+    await handleMixedQuery(startTime)
+  } else if (startsBeforeCutoff) {
+    // 历史数据查询 - 使用 HBase
+    console.log('📚 查询历史数据 (HBase)...')
+    await handleHbaseQuery(startTime)
+  } else {
+    // 热数据查询 - 使用 MySQL
+    console.log('🔥 查询热数据 (MySQL)...')
+    await handleMysqlQuery(startTime)
+  }
+}
+
+// 混合查询（跨 HBase 和 MySQL）
+const handleMixedQuery = async (startTime: number) => {
+  const cutoffDate = new Date('2024-01-01T00:00:00')
+  
+  // 并行查询两个数据源
+  const hbaseParams: Record<string, any> = {
+    source: 'hbase',
+    page: 1,
+    size: Math.ceil(pageSize.value / 2)  // 每个源取一半
+  }
+  const mysqlParams: Record<string, any> = {
+    page: 1,
+    pageSize: Math.ceil(pageSize.value / 2)
+  }
+  
+  if (filters.dateRange && filters.dateRange.length === 2) {
+    // HBase 查 2024-01-01 之前的部分
+    hbaseParams.startTime = formatLocalDateTime(filters.dateRange[0] as Date)
+    hbaseParams.endTime = formatLocalDateTime(cutoffDate)
+    // MySQL 查 2024-01-01 之后的部分
+    mysqlParams.startTime = formatLocalDateTime(cutoffDate)
+    mysqlParams.endTime = formatLocalDateTime(filters.dateRange[1] as Date)
+  }
+  if (filters.checkpointId) {
+    hbaseParams.checkpointId = filters.checkpointId
+    mysqlParams.checkpointId = filters.checkpointId
+  }
+  if (filters.direction) {
+    mysqlParams.direction = filters.direction
+  }
+  
+  console.log('🔍 混合查询参数:', { hbase: hbaseParams, mysql: mysqlParams })
+  
+  try {
+    // 并行请求
+    const [hbaseRes, mysqlRes] = await Promise.all([
+      queryRecords(hbaseParams),
+      searchRecords(mysqlParams)
+    ])
+    
+    console.log('📋 HBase 响应:', hbaseRes)
+    console.log('📋 MySQL 响应:', mysqlRes)
+    
+    setColumnsForQueryType('traffic')
+    
+    // 合并结果
+    const hbaseList = (hbaseRes.code === 200 && hbaseRes.data?.list || []).map((item: any) => ({
+      id: item.rowKey || item.id,
+      plateNumber: item.plateNumber || item.hp,
+      checkpointId: item.checkpointId,
+      checkpointName: checkpointNameMap.value[item.checkpointId] || item.checkpointName || `卡口${item.checkpointId}`,
+      passTime: item.passTime || item.gcsj,
+      direction: item.direction === '1' ? '进城' : item.direction === '2' ? '出城' : item.direction,
+      vehicleType: item.vehicleType || item.clppxh,
+      plateType: item.plateType || item.hpzl,
+      district: item.district || item.xzqhmc,
+      source: 'hbase'
+    }))
+    
+    const mysqlList = (mysqlRes.code === 200 && mysqlRes.data?.list || []).map((item: any) => ({
+      ...item,
+      checkpointName: checkpointNameMap.value[item.checkpointId] || item.checkpointName || `卡口${item.checkpointId}`,
+      source: 'mysql'
+    }))
+    
+    // 合并并按时间排序（最新的在前）
+    queryResult.value = [...mysqlList, ...hbaseList].sort((a, b) => {
+      const timeA = new Date(a.passTime).getTime()
+      const timeB = new Date(b.passTime).getTime()
+      return timeB - timeA
+    })
+    
+    const hbaseTotal = hbaseRes.data?.totalCount || hbaseList.length
+    const mysqlTotal = mysqlRes.data?.total || mysqlList.length
+    totalCount.value = hbaseTotal + mysqlTotal
+    queryTime.value = Date.now() - startTime
+    
+    // 更新 HBase 分页状态
+    hbaseNextRowKey.value = hbaseRes.data?.nextRowKey
+    hasMoreHbaseData.value = hbaseRes.data?.hasMoreHistory || false
+    
+    console.log('✅ 混合查询结果: HBase', hbaseList.length, '条 + MySQL', mysqlList.length, '条')
+    
+    addToHistory('quick', getQueryDesc())
+    ElMessage.success(`查询完成，共 ${totalCount.value} 条记录 (历史 ${hbaseTotal} + 热数据 ${mysqlTotal})`)
+  } catch (e: any) {
+    console.error('混合查询失败:', e)
+    ElMessage.error(e.message || '查询失败')
+  }
+}
+
+// MySQL 热数据查询
+const handleMysqlQuery = async (startTime: number) => {
   const params: Record<string, any> = {
     page: currentPage.value,
     pageSize: pageSize.value
   }
   
   if (filters.dateRange && filters.dateRange.length === 2) {
-    params.startTime = (filters.dateRange[0] as Date).toISOString()
-    params.endTime = (filters.dateRange[1] as Date).toISOString()
+    // 使用本地时间格式，避免 UTC 时区偏移导致查询错误
+    params.startTime = formatLocalDateTime(filters.dateRange[0] as Date)
+    params.endTime = formatLocalDateTime(filters.dateRange[1] as Date)
   }
   if (filters.checkpointId) params.checkpointId = filters.checkpointId
   if (filters.direction) params.direction = filters.direction
   
-  console.log('🔍 车流量查询参数:', params)
+  console.log('🔍 MySQL 查询参数:', params)
   const res = await searchRecords(params)
-  console.log('📋 车流量查询响应:', res)
+  console.log('📋 MySQL 查询响应:', res)
   
   if (res.code === 200 && res.data) {
     setColumnsForQueryType('traffic')
@@ -474,10 +556,58 @@ const handleTrafficQuery = async (startTime: number) => {
     }))
     totalCount.value = res.data.total || 0
     queryTime.value = Date.now() - startTime
-    console.log('✅ 车流量查询结果:', queryResult.value.length, '条')
+    console.log('✅ MySQL 查询结果:', queryResult.value.length, '条')
     
     addToHistory('quick', getQueryDesc())
     ElMessage.success(`查询完成，共 ${totalCount.value} 条记录`)
+  } else {
+    ElMessage.error(res.msg || '查询失败')
+  }
+}
+
+// HBase 历史数据查询
+const handleHbaseQuery = async (startTime: number) => {
+  const params: Record<string, any> = {
+    source: 'hbase',
+    page: currentPage.value,
+    size: pageSize.value
+  }
+  
+  if (filters.dateRange && filters.dateRange.length === 2) {
+    params.startTime = formatLocalDateTime(filters.dateRange[0] as Date)
+    params.endTime = formatLocalDateTime(filters.dateRange[1] as Date)
+  }
+  if (filters.checkpointId) params.checkpointId = filters.checkpointId
+  
+  console.log('🔍 HBase 查询参数:', params)
+  const res = await queryRecords(params)
+  console.log('📋 HBase 查询响应:', res)
+  
+  if (res.code === 200 && res.data) {
+    setColumnsForQueryType('traffic')
+    // 转换 HBase 数据格式
+    queryResult.value = (res.data.list || []).map((item: any) => ({
+      id: item.rowKey || item.id,
+      plateNumber: item.plateNumber || item.hp,
+      checkpointId: item.checkpointId,
+      checkpointName: checkpointNameMap.value[item.checkpointId] || item.checkpointName || `卡口${item.checkpointId}`,
+      passTime: item.passTime || item.gcsj,
+      direction: item.direction === '1' ? '进城' : item.direction === '2' ? '出城' : item.direction,
+      vehicleType: item.vehicleType || item.clppxh,
+      plateType: item.plateType || item.hpzl,
+      district: item.district || item.xzqhmc
+    }))
+    totalCount.value = res.data.totalCount || res.data.list?.length || 0
+    queryTime.value = Date.now() - startTime
+    
+    // 更新 HBase 分页状态
+    hbaseNextRowKey.value = res.data.nextRowKey
+    hasMoreHbaseData.value = res.data.hasMoreHistory || false
+    
+    console.log('✅ HBase 查询结果:', queryResult.value.length, '条, 总数:', totalCount.value)
+    
+    addToHistory('quick', getQueryDesc())
+    ElMessage.success(`查询完成，共 ${totalCount.value} 条记录 (历史数据)`)
   } else {
     ElMessage.error(res.msg || '查询失败')
   }
@@ -670,7 +800,6 @@ const resetFilters = () => {
   filters.direction = ''
   filters.plateNumber = ''
   filters.cloneStatus = ''
-  filters.groupBy = 'checkpoint'
 }
 
 const clearHistory = () => {

@@ -52,6 +52,8 @@ export interface PassRecord {
 export interface PassRecordQueryParams {
   /** 车牌号 */
   plateNumber?: string
+  /** 卡口ID */
+  checkpointId?: string
   /** 入口卡口ID */
   entryCheckpointId?: string
   /** 出口卡口ID */
@@ -60,6 +62,8 @@ export interface PassRecordQueryParams {
   startTime?: string
   /** 结束时间 */
   endTime?: string
+  /** 通行方向: "1"=进城, "2"=出城 */
+  direction?: string
   /** 车辆类型 */
   vehicleType?: VehicleTypeEnum
   /** 通行状态 */

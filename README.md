@@ -22,14 +22,7 @@
 
 ## 快速开始
 
-### 1. 启动 Docker 服务
-
-```bash
-# 启动所有服务（首次需要 --build）
-docker compose up -d --build
-```
-
-### 1.1 数据导入与实时模拟（推荐）
+### 1 数据导入与实时模拟
 
 > 历史数据仅入 HBase；实时数据通过 Kafka→Flink 落 MySQL（热数据）并写入 HBase（归档）。
 
@@ -45,6 +38,13 @@ docker run --rm -v "$PWD":/workspace -w /workspace maven:3.9-eclipse-temurin-17 
 
 # 确认 JobManager 容器能看到 JAR（docker-compose.yml 会挂载 ./flink-jobs/target → /opt/flink/jobs）
 docker compose exec flink-jobmanager ls -la /opt/flink/jobs
+
+### 2 启动 Docker 服务
+
+```bash
+# 启动所有服务（首次需要 --build）
+docker compose up -d --build
+```
 
 # 提交作业（-d 表示后台运行；JAR 文件名以 /opt/flink/jobs 实际输出为准）
 docker compose exec flink-jobmanager flink run -d -c com.etc.flink.MySqlStorageJob /opt/flink/jobs/etc-flink-jobs-1.0.0.jar

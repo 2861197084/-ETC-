@@ -66,6 +66,46 @@ def get_checkpoint_id(kkmc: str) -> str | None:
         return None
     return RAW_KKMC_TO_ID.get(kkmc.strip())
 
+def parse_gcsj(raw: str) -> tuple[datetime | None, str]:
+    """
+    兼容 CSV 的时间格式，并统一输出 'YYYY-MM-DD HH:MM:SS'。
+
+    数据样例可能为：
+    - 2024/1/1 0:00:01
+    - 2024-01-01 00:00:01
+    """
+    s = (raw or "").strip()
+    if not s:
+        return None, ""
+    parts = s.replace("T", " ").split()
+    date_part = parts[0] if parts else ""
+    time_part = parts[1] if len(parts) > 1 else "00:00:00"
+
+    date_sep = "/" if "/" in date_part else "-"
+    d = date_part.split(date_sep)
+    if len(d) != 3:
+        return None, ""
+    try:
+        y = int(d[0])
+        m = int(d[1])
+        day = int(d[2])
+    except Exception:
+        return None, ""
+
+    t = time_part.split(":")
+    try:
+        hh = int(t[0]) if len(t) > 0 and t[0] else 0
+        mm = int(t[1]) if len(t) > 1 and t[1] else 0
+        ss = int(t[2]) if len(t) > 2 and t[2] else 0
+    except Exception:
+        return None, ""
+
+    try:
+        dt = datetime(y, m, day, hh, mm, ss)
+    except Exception:
+        return None, ""
+    return dt, dt.strftime("%Y-%m-%d %H:%M:%S")
+
 
 class TimeWindow:
     """时间窗口"""
@@ -175,10 +215,10 @@ class CsvWindowStreamer:
                     continue
 
             try:
-                gcsj = (row.get('GCSJ') or '').strip()
-                if not gcsj:
+                raw_gcsj = (row.get('GCSJ') or '').strip()
+                dt, gcsj = parse_gcsj(raw_gcsj)
+                if dt is None or not gcsj:
                     continue
-                dt = datetime.strptime(gcsj, '%Y-%m-%d %H:%M:%S')
             except Exception:
                 continue
 

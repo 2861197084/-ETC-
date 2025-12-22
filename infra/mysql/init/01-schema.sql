@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS pass_record_0 (
   plate_hash INT NOT NULL,
   checkpoint_id VARCHAR(64) NULL,
   PRIMARY KEY (id),
+  UNIQUE KEY uk_gcxh (gcxh),
   KEY idx_gcsj (gcsj),
   KEY idx_hp (hp),
   KEY idx_checkpoint_id_gcsj (checkpoint_id, gcsj)

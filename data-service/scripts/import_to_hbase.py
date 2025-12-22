@@ -11,6 +11,7 @@ import csv
 import logging
 from datetime import datetime
 import hashlib
+from zoneinfo import ZoneInfo
 
 # 添加父目录到路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -74,40 +75,78 @@ RAW_KKMC_TO_ID = {
     "徐州市丰县鹿梁路K19丰县梁寨检查站市际卡口": "CP019",
 }
 
+def stable_hash_mod(value: str, mod: int) -> int:
+    if not value:
+        return 0
+    digest = hashlib.md5(value.encode('utf-8')).digest()
+    n = int.from_bytes(digest[:4], byteorder='big', signed=False)
+    return n % mod
 
-def generate_rowkey(record: dict) -> str:
+
+def normalize_gcsj(raw: str) -> tuple[str, datetime | None]:
+    """
+    将 CSV 的 GCSJ 归一化为 'YYYY-MM-DD HH:MM:SS'，并返回对应 datetime。
+
+    兼容：
+    - 2023/12/1 0:00:01
+    - 2023-12-01 00:00:01
+    """
+    s = (raw or "").strip()
+    if not s:
+        return "", None
+
+    parts = s.replace("T", " ").split()
+    date_part = parts[0] if parts else ""
+    time_part = parts[1] if len(parts) > 1 else "00:00:00"
+
+    date_sep = "/" if "/" in date_part else "-"
+    d = date_part.split(date_sep)
+    if len(d) != 3:
+        return s, None
+
+    try:
+        y = int(d[0])
+        m = int(d[1])
+        day = int(d[2])
+    except Exception:
+        return s, None
+
+    t = time_part.split(":")
+    try:
+        hh = int(t[0]) if len(t) > 0 and t[0] else 0
+        mm = int(t[1]) if len(t) > 1 and t[1] else 0
+        ss = int(t[2]) if len(t) > 2 and t[2] else 0
+    except Exception:
+        return s, None
+
+    try:
+        dt = datetime(y, m, day, hh, mm, ss)
+    except Exception:
+        return s, None
+
+    return dt.strftime("%Y-%m-%d %H:%M:%S"), dt
+
+
+def generate_rowkey(record: dict, gcsj_dt: datetime | None) -> str:
     """
     生成 RowKey
     格式: {salt}{yyyyMMdd}{checkpoint_hash}{reverse_ts}{plate_hash}
     """
     hp = record.get('hp', '')
-    gcsj = record.get('gcsj', '')
     kkmc = record.get('kkmc', '')
-    
-    def stable_hash_mod(value: str, mod: int) -> int:
-        if not value:
-            return 0
-        digest = hashlib.md5(value.encode('utf-8')).digest()
-        n = int.from_bytes(digest[:4], byteorder='big', signed=False)
-        return n % mod
 
     # Salt (0-9) 用于打散热点（稳定哈希，跨语言一致）
     salt = stable_hash_mod(hp, 10)
     
     # 日期
-    date_str = "20231201"
-    try:
-        if gcsj and len(gcsj) >= 10:
-            date_str = gcsj[:10].replace("-", "")
-    except:
-        pass
+    date_str = (gcsj_dt.strftime("%Y%m%d") if gcsj_dt else "20231201")
     
     # 反转时间戳（最新的排在前面）
-    try:
-        dt = datetime.strptime(gcsj, '%Y-%m-%d %H:%M:%S')
-        ts = int(dt.timestamp() * 1000)
+    if gcsj_dt is not None:
+        # 统一按 Asia/Shanghai 计算毫秒时间戳，避免不同运行环境时区导致 RowKey 顺序异常
+        ts = int(gcsj_dt.replace(tzinfo=ZoneInfo("Asia/Shanghai")).timestamp() * 1000)
         reverse_ts = 9999999999999 - ts
-    except:
+    else:
         reverse_ts = 9999999999999
     
     # 卡口哈希（稳定哈希）
@@ -129,7 +168,7 @@ def import_csv_to_hbase(csv_path: str, table, redis_client=None, batch_size: int
         return 0
     
     inserted = 0
-    batch = table.batch()
+    batch = table.batch(batch_size=batch_size)
     redis_batch_total = 0
     redis_checkpoint_counts: dict[str, int] = {}
     
@@ -141,12 +180,15 @@ def import_csv_to_hbase(csv_path: str, table, redis_client=None, batch_size: int
             for row in reader:
                 try:
                     kkmc = row.get('KKMC', '')
+                    gcsj_norm, gcsj_dt = normalize_gcsj(row.get('GCSJ', ''))
+                    if not gcsj_norm or gcsj_dt is None:
+                        continue
                     record = {
                         'gcxh': row.get('GCXH', ''),
                         'xzqhmc': row.get('XZQHMC', ''),
                         'kkmc': kkmc,
                         'fxlx': row.get('FXLX', ''),
-                        'gcsj': row.get('GCSJ', ''),
+                        'gcsj': gcsj_norm,
                         'hpzl': row.get('HPZL', ''),
                         'hp': row.get('HP', ''),
                         'clppxh': row.get('CLPPXH', ''),
@@ -154,7 +196,7 @@ def import_csv_to_hbase(csv_path: str, table, redis_client=None, batch_size: int
                     }
                     
                     # 生成 RowKey
-                    rowkey = generate_rowkey(record)
+                    rowkey = generate_rowkey(record, gcsj_dt)
                     
                     # 准备列数据
                     data = {
@@ -178,7 +220,6 @@ def import_csv_to_hbase(csv_path: str, table, redis_client=None, batch_size: int
                             redis_checkpoint_counts[cp] = redis_checkpoint_counts.get(cp, 0) + 1
                     
                     if inserted % batch_size == 0:
-                        batch.send()
                         logger.info(f"  已插入 {inserted} 条...")
                         flush_redis(redis_client, redis_batch_total, redis_checkpoint_counts)
                         redis_batch_total = 0
@@ -262,10 +303,13 @@ def main():
     
     logger.info(f"找到 {len(csv_files)} 个 CSV 文件")
     
+    batch_size = int(os.getenv("HBASE_IMPORT_BATCH_SIZE", "5000"))
+    logger.info(f"写入批大小: {batch_size} (可用环境变量 HBASE_IMPORT_BATCH_SIZE 调整)")
+
     total_inserted = 0
     for csv_path in csv_files:
         try:
-            count = import_csv_to_hbase(csv_path, table, redis_client=redis_client)
+            count = import_csv_to_hbase(csv_path, table, redis_client=redis_client, batch_size=batch_size)
             total_inserted += count
         except Exception as e:
             logger.error(f"导入失败: {e}")
