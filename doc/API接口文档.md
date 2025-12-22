@@ -1,6 +1,6 @@
 # ETC 后端 API 接口文档（与实现一致）
 
-> 更新日期：2025-12-21  
+> 更新日期：2025-12-22  
 > 接口返回：除少数登录失败等场景外，统一为 `{ code, msg, data }`
 
 ---
@@ -13,6 +13,7 @@
 | 用户 | `/api/user` | 用户信息 |
 | 时间 | `/api/time` | 虚拟时间服务 |
 | 渐进式查询 | `/api/progressive` | MySQL(热) + HBase(历史) |
+| 统计查询 | `/api/stats` | 聚合统计（Redis缓存 + Trino联邦查询） |
 | 地图 | `/admin/map` | 卡口地图与实时态势 |
 | 实时 | `/admin/realtime` | 指挥舱统计/告警 |
 | 查询 | `/admin/query` | 查询中心（基础查询 + Text2SQL） |
@@ -146,6 +147,70 @@
 ### GET /admin/query/options/checkpoints
 
 ### GET /admin/query/options/vehicle-types
+
+---
+
+## 9. 统计查询（Redis 缓存 + Trino 联邦查询）
+
+> 提供聚合统计能力，自动选择数据源：HBase 历史统计（Redis 缓存）或 MySQL 热数据（Trino 联邦查询）。
+
+### GET /api/stats/total
+
+获取总记录数统计，自动选择数据源。
+
+参数：
+- `startDate`（必填）：开始日期，格式 `yyyy-MM-dd`
+- `endDate`（必填）：结束日期，格式 `yyyy-MM-dd`
+- `checkpointId`（可选）：卡口 ID 筛选
+
+响应：
+
+```json
+{
+  "code": 200,
+  "data": {
+    "hbaseCount": 438631,
+    "mysqlCount": 0,
+    "totalCount": 438631,
+    "hbaseCached": true,
+    "mysqlCached": false,
+    "checkpointCounts": { "CP001": 36540, "CP002": 28910, ... },
+    "source": "hbase",
+    "queryTimeMs": 45
+  }
+}
+```
+
+### GET /api/stats/daily
+
+获取日期范围内每天的记录数。
+
+### GET /api/stats/by-checkpoint
+
+获取按收费站分组的统计数据。
+
+### GET /api/stats/hbase/warmup
+
+预热单天 HBase 统计缓存。
+
+参数：
+- `date`（必填）：日期，格式 `yyyy-MM-dd`
+
+### GET /api/stats/hbase/cached
+
+获取已缓存的指定日期统计（不重新计算）。
+
+### POST /api/stats/hbase/refresh
+
+手动触发 HBase 统计缓存刷新。
+
+### GET /api/stats/trino/status
+
+检查 Trino 服务是否可用。
+
+### POST /api/stats/trino/query
+
+执行自定义 Trino SQL 查询（仅限开发调试）。
 
 ---
 

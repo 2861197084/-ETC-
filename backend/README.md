@@ -55,6 +55,9 @@ docker compose up -d backend
 | 实时 | `/admin/realtime/violations` | 违规列表 |
 | 查询 | `/admin/query/records` | 通行记录查询 |
 | 查询 | `/admin/query/text2sql` | 自然语言查询 |
+| 统计 | `/api/stats/total` | 聚合统计（Redis缓存） |
+| 统计 | `/api/stats/daily` | 每日统计 |
+| 统计 | `/api/stats/by-checkpoint` | 按卡口统计 |
 
 ### 套牌检测查询参数
 
