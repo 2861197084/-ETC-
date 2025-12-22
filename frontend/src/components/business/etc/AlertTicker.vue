@@ -1,14 +1,16 @@
 <template>
-  <div class="alert-ticker">
+  <div class="alert-ticker glass-card">
     <div class="ticker-header">
-      <span class="ticker-title">
-        <el-icon><Warning /></el-icon>
-        实时告警
-      </span>
+      <div class="title-group">
+        <div class="icon-wrapper">
+          <el-icon><Warning /></el-icon>
+        </div>
+        <span class="ticker-title">实时告警</span>
+      </div>
       <div class="header-actions">
-        <el-badge :value="pendingCount" type="danger" :hidden="pendingCount === 0" />
-        <el-button type="primary" link size="small" @click="showAllDialog = true">
-          查看全部 ({{ alerts.length }})
+        <el-badge :value="pendingCount" type="danger" :hidden="pendingCount === 0" class="count-badge" />
+        <el-button type="primary" link @click="showAllDialog = true" class="view-all-btn">
+          查看全部
         </el-button>
       </div>
     </div>
@@ -18,14 +20,17 @@
           v-for="alert in displayAlerts"
           :key="alert.id"
           class="alert-item"
-          :class="[`alert-${alert.type}`]"
         >
+          <div class="indicator"></div>
+          <div class="alert-main">
+            <span class="alert-plate" v-if="alert.plate && alert.type !== 'pressure'">{{ alert.plate }}</span>
+            <span class="alert-plate" v-else>{{ alert.type === 'pressure' ? '交通拥堵' : '未知车辆' }}</span>
+            <span class="alert-type-tag" :class="alert.type">
+              {{ alertTypeLabels[alert.type] }}
+            </span>
+          </div>
           <span class="alert-time">{{ alert.time }}</span>
-          <span class="alert-type-tag" :class="alert.type">
-            {{ alertTypeLabels[alert.type] }}
-          </span>
-          <span class="alert-message" v-html="highlightKeywords(alert.message)"></span>
-          <span class="alert-plate" v-if="alert.plate && alert.type !== 'pressure'">{{ alert.plate }}</span>
+          
           <el-button 
             type="success" 
             size="small" 
@@ -33,7 +38,7 @@
             class="handle-btn"
             @click.stop="handleAlert(alert)"
           >
-            已处理
+            处理
           </el-button>
         </li>
       </TransitionGroup>
@@ -48,6 +53,7 @@
       title="告警历史" 
       width="700px"
       :close-on-click-modal="false"
+      append-to-body
     >
       <div class="dialog-filter">
         <el-radio-group v-model="dialogFilter" size="small">
@@ -235,51 +241,95 @@ onUnmounted(() => {
 </script>
 
 <style lang="scss" scoped>
+.glass-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 16px;
+  box-shadow: 
+    0 4px 6px -1px rgba(0, 0, 0, 0.05),
+    0 2px 4px -1px rgba(0, 0, 0, 0.03),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+}
+
 .alert-ticker {
-  background: #fff;
-  border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  border: 1px solid #e8e8e8;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 
   .ticker-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 16px;
-    background: #fff1f0;
-    border-bottom: 1px solid #ffccc7;
+    padding: 20px 24px 12px;
+    background: transparent;
+    border-bottom: none;
 
-    .ticker-title {
+    .title-group {
       display: flex;
       align-items: center;
-      gap: 8px;
-      color: #ff4d4f;
-      font-weight: 600;
-      font-size: 14px;
+      gap: 12px;
+
+      .icon-wrapper {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: rgba(255, 77, 79, 0.1);
+        color: #ff4d4f;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(255, 77, 79, 0.2);
+        
+        .el-icon {
+          font-size: 14px;
+        }
+      }
+
+      .ticker-title {
+        color: #1f2937;
+        font-weight: 700;
+        font-size: 16px;
+        letter-spacing: -0.01em;
+      }
     }
 
     .header-actions {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 8px;
+      
+      .count-badge {
+        margin-right: 4px;
+        :deep(.el-badge__content) {
+          border: none;
+          background: #ff4d4f;
+        }
+      }
+
+      .view-all-btn {
+        font-size: 13px;
+        color: #3b82f6;
+        padding: 0;
+        
+        &:hover {
+          color: #2563eb;
+        }
+      }
     }
   }
 
   .ticker-content {
-    max-height: 300px;
+    flex: 1;
     overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: #d9d9d9 transparent;
-
+    padding: 0;
+    
+    /* Hide scrollbar */
     &::-webkit-scrollbar {
-      width: 4px;
+      display: none;
     }
-
-    &::-webkit-scrollbar-thumb {
-      background: #d9d9d9;
-      border-radius: 2px;
-    }
+    scrollbar-width: none;
   }
 
   .alert-list {
@@ -291,76 +341,81 @@ onUnmounted(() => {
   .alert-item {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 10px 16px;
-    border-bottom: 1px solid #f0f0f0;
-    font-size: 13px;
-    color: #1f2329;
-    transition: background 0.3s;
+    justify-content: space-between;
+    padding: 16px 24px;
+    border-bottom: 1px solid #f1f5f9;
+    position: relative;
+    transition: all 0.2s ease;
+    background: transparent;
+
+    &:last-child {
+      border-bottom: none;
+    }
 
     &:hover {
-      background: #fafafa;
+      background: rgba(248, 250, 252, 0.5);
+    }
+
+    /* Red indicator bar on the left */
+    .indicator {
+      position: absolute;
+      left: 0;
+      top: 16px;
+      bottom: 16px;
+      width: 4px;
+      background: #ef4444;
+      border-radius: 0 4px 4px 0;
+      opacity: 0.8;
+    }
+
+    .alert-main {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+
+      .alert-plate {
+        font-family: 'Inter', ui-monospace, monospace;
+        font-weight: 700;
+        font-size: 16px;
+        color: #111827;
+        letter-spacing: -0.01em;
+      }
+
+      .alert-type-tag {
+        padding: 2px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        
+        /* Unified style for all tags to match design - light red bg with red text */
+        background: #fee2e2;
+        color: #ef4444;
+        
+        &.dispatch {
+          background: #dbeafe;
+          color: #2563eb;
+        }
+        
+        &.pressure {
+          background: #ffedd5;
+          color: #ea580c;
+        }
+      }
     }
 
     .alert-time {
-      color: #8c8c8c;
-      font-size: 12px;
-      min-width: 50px;
-    }
-
-    .alert-type-tag {
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 12px;
+      color: #94a3b8;
+      font-size: 14px;
       font-weight: 500;
-
-      &.overspeed {
-        background: #fffbe6;
-        color: #d48806;
-      }
-
-      &.duplicate {
-        background: #fff1f0;
-        color: #ff4d4f;
-      }
-
-      &.illegal {
-        background: #fff1f0;
-        color: #ff4d4f;
-      }
-
-      &.dispatch {
-        background: #e6f7ff;
-        color: #1890ff;
-      }
-
-      &.pressure {
-        background: #fff2e8;
-        color: #fa541c;
-      }
-    }
-
-    .alert-message {
-      flex: 1;
-
-      :deep(.highlight) {
-        color: #ff4d4f;
-        font-weight: 600;
-      }
-    }
-
-    .alert-plate {
-      padding: 2px 8px;
-      background: #f5f5f5;
-      border-radius: 4px;
-      font-family: 'Courier New', monospace;
-      font-weight: 600;
-      color: #1f2329;
+      font-feature-settings: "tnum";
     }
 
     .handle-btn {
       opacity: 0;
       transition: opacity 0.2s;
+      position: absolute;
+      right: 80px; /* Position it before time */
     }
 
     &:hover .handle-btn {
@@ -369,10 +424,10 @@ onUnmounted(() => {
   }
 
   .empty-tip {
-    padding: 24px;
+    padding: 32px;
     text-align: center;
-    color: #8c8c8c;
-    font-size: 13px;
+    color: #94a3b8;
+    font-size: 14px;
   }
 }
 

@@ -324,25 +324,29 @@ async function handleDynamicRoutes(
     // 关闭 loading
     closeLoading()
 
+    // 重置状态
+    routeInitInProgress = false
+
     // 401 错误：axios 拦截器已处理退出登录，取消当前导航
     if (isUnauthorizedError(error)) {
-      // 重置状态，允许重新登录后再次初始化
-      routeInitInProgress = false
       next(false)
       return
     }
-
-    // 标记初始化失败，防止死循环
-    routeInitFailed = true
-    routeInitInProgress = false
 
     // 输出详细错误信息，便于排查
     if (isHttpError(error)) {
       console.error(`[RouteGuard] 错误码: ${error.code}, 消息: ${error.message}`)
     }
 
-    // 跳转到 500 页面，使用 replace 避免产生历史记录
-    next({ name: 'Exception500', replace: true })
+    // 获取菜单/用户信息失败时，清除登录状态并跳转到登录页
+    // 这比跳转到 500 页面更友好，让用户重新登录即可
+    const userStore = useUserStore()
+    userStore.logOut()
+    next({
+      name: 'Login',
+      query: to.path !== '/' ? { redirect: to.fullPath } : undefined,
+      replace: true
+    })
   }
 }
 
@@ -395,7 +399,9 @@ function handleRootPathRedirect(to: RouteLocationNormalized, next: NavigationGua
     return true
   }
 
-  return false
+  // 根路径没有首页配置时，重定向到登录页（避免显示 404）
+  next({ path: RoutesAlias.Login, replace: true })
+  return true
 }
 
 /**
