@@ -74,3 +74,12 @@ etc:
   stats:
     refresh-ms: 30000
     ttl-seconds: 60
+  hbase:
+    stats:
+      ttl-hours: 24
+
+# Trino 联邦查询配置
+trino:
+  url: jdbc:trino://${TRINO_HOST:trino}:${TRINO_PORT:8080}
+  user: ${TRINO_USER:trino}
+  enabled: ${TRINO_ENABLED:true}

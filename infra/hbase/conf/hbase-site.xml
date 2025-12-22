@@ -24,5 +24,30 @@
     <name>hbase.unsafe.stream.capability.enforce</name>
     <value>false</value>
   </property>
-</configuration>
 
+  <!-- Demo stability tuning: reduce memory pressure and background compactions -->
+  <property>
+    <name>hbase.regionserver.global.memstore.size</name>
+    <value>0.25</value>
+  </property>
+  <property>
+    <name>hfile.block.cache.size</name>
+    <value>0.20</value>
+  </property>
+  <property>
+    <name>hbase.hstore.compaction.min</name>
+    <value>20</value>
+  </property>
+  <property>
+    <name>hbase.hstore.blockingStoreFiles</name>
+    <value>200</value>
+  </property>
+  <property>
+    <name>hbase.regionserver.thread.compaction.small</name>
+    <value>1</value>
+  </property>
+  <property>
+    <name>hbase.regionserver.thread.compaction.large</name>
+    <value>1</value>
+  </property>
+</configuration>

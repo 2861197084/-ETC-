@@ -2,7 +2,7 @@
   <div class="query-page">
     <div class="page-header">
       <h2 class="page-title">数据查询</h2>
-      <p class="page-desc">支持车流量统计和套牌嫌疑查询，分析交通数据</p>
+      <p class="page-desc">支持车流量统计、明细查询和套牌嫌疑分析</p>
     </div>
 
     <!-- Tab 切换：快捷查询 / 高级查询 -->
@@ -13,7 +13,8 @@
           <!-- 查询类型选择 -->
           <div class="query-type-selector">
             <el-radio-group v-model="queryType" size="large">
-              <el-radio-button value="traffic">车流量统计</el-radio-button>
+              <el-radio-button value="stats">车流量统计</el-radio-button>
+              <el-radio-button value="detail">车流量明细</el-radio-button>
               <el-radio-button value="clone">套牌嫌疑</el-radio-button>
             </el-radio-group>
           </div>
@@ -34,8 +35,8 @@
                 />
               </el-form-item>
 
-              <!-- 卡口选择 - 车流量统计 -->
-              <el-form-item label="卡口" v-if="queryType === 'traffic'">
+              <!-- 卡口选择 - 车流量统计/明细 -->
+              <el-form-item label="卡口" v-if="queryType === 'stats' || queryType === 'detail'">
                 <el-select 
                   v-model="filters.checkpointId" 
                   placeholder="全部卡口" 
@@ -70,8 +71,8 @@
                 </el-select>
               </el-form-item>
 
-              <!-- 通行方向 - 车流量统计 -->
-              <el-form-item label="通行方向" v-if="queryType === 'traffic'">
+              <!-- 通行方向 - 车流量明细 -->
+              <el-form-item label="通行方向" v-if="queryType === 'detail'">
                 <el-select v-model="filters.direction" placeholder="全部方向" clearable style="width: 120px">
                   <el-option label="进城" value="1" />
                   <el-option label="出城" value="2" />
@@ -155,11 +156,86 @@
       </el-tab-pane>
     </el-tabs>
 
-    <!-- 查询结果 -->
-    <div class="query-result" v-if="queryResult.length > 0 || queryLoading">
+    <!-- 统计结果展示 (车流量统计) -->
+    <div class="stats-result" v-if="queryType === 'stats' && (statsData || statsLoading)">
+      <div class="stats-header">
+        <h3>统计结果</h3>
+        <span v-if="statsQueryTime" class="query-time">查询耗时: {{ statsQueryTime }}ms</span>
+      </div>
+      
+      <el-skeleton :loading="statsLoading" animated :rows="4">
+        <template #default>
+          <!-- 总览卡片 -->
+          <div class="stats-overview">
+            <div class="stats-card total">
+              <div class="stats-icon">
+                <el-icon size="32"><TrendCharts /></el-icon>
+              </div>
+              <div class="stats-content">
+                <div class="stats-value">{{ formatNumber(statsData?.totalCount || 0) }}</div>
+                <div class="stats-label">总通行量</div>
+              </div>
+            </div>
+            <div class="stats-card checkpoint">
+              <div class="stats-icon">
+                <el-icon size="32"><Location /></el-icon>
+              </div>
+              <div class="stats-content">
+                <div class="stats-value">{{ statsData?.checkpointCount || 0 }}</div>
+                <div class="stats-label">涉及卡口数</div>
+              </div>
+            </div>
+            <div class="stats-card avg">
+              <div class="stats-icon">
+                <el-icon size="32"><DataAnalysis /></el-icon>
+              </div>
+              <div class="stats-content">
+                <div class="stats-value">{{ formatNumber(statsData?.avgPerCheckpoint || 0) }}</div>
+                <div class="stats-label">平均卡口流量</div>
+              </div>
+            </div>
+            <div class="stats-card source">
+              <div class="stats-icon">
+                <el-icon size="32"><Coin /></el-icon>
+              </div>
+              <div class="stats-content">
+                <div class="stats-value">{{ statsData?.dataSource || '-' }}</div>
+                <div class="stats-label">数据来源</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 各卡口统计表格 -->
+          <div class="checkpoint-stats" v-if="statsData?.checkpointStats?.length">
+            <h4>各卡口通行量排行</h4>
+            <el-table :data="statsData.checkpointStats" stripe max-height="350">
+              <el-table-column type="index" label="排名" width="70" />
+              <el-table-column prop="checkpointName" label="卡口名称" min-width="180" />
+              <el-table-column prop="count" label="通行量" width="120" sortable>
+                <template #default="{ row }">
+                  {{ formatNumber(row.count) }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="percentage" label="占比" width="120">
+                <template #default="{ row }">
+                  <el-progress 
+                    :percentage="row.percentage" 
+                    :stroke-width="14"
+                    :format="(p: number) => p.toFixed(1) + '%'"
+                  />
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </template>
+      </el-skeleton>
+    </div>
+
+    <!-- 查询结果 (明细/套牌) -->
+    <div class="query-result" v-if="queryType !== 'stats' && (queryResult.length > 0 || queryLoading)">
       <div class="result-header">
         <div class="result-info">
-          <span class="result-count">
+          <span v-if="!hbaseFilteredQuery" class="result-count">
             共 {{ totalCount }} 条记录
           </span>
           <span v-if="queryTime" class="query-time">
@@ -192,13 +268,41 @@
       </el-table>
 
       <div class="pagination-wrapper">
-        <el-pagination
-          v-model:current-page="currentPage"
-          v-model:page-size="pageSize"
-          :page-sizes="[20, 50, 100]"
-          :total="totalCount"
-          layout="total, sizes, prev, pager, next"
-        />
+        <!-- 筛选结果模式：只显示上一页/下一页 -->
+        <template v-if="hbaseFilteredQuery">
+          <div class="simple-pagination">
+            <el-button 
+              :disabled="currentPage <= 1" 
+              @click="handlePageChange(currentPage - 1)"
+            >
+              上一页
+            </el-button>
+            <span class="page-info">第 {{ currentPage }} 页</span>
+            <el-button 
+              :disabled="!hasMoreHbaseData && queryResult.length < pageSize" 
+              @click="handlePageChange(currentPage + 1)"
+            >
+              下一页
+            </el-button>
+            <el-select v-model="pageSize" style="width: 100px; margin-left: 12px" @change="handleSizeChange">
+              <el-option :value="20" label="20条/页" />
+              <el-option :value="50" label="50条/页" />
+              <el-option :value="100" label="100条/页" />
+            </el-select>
+          </div>
+        </template>
+        <!-- 正常模式：显示完整分页器 -->
+        <template v-else>
+          <el-pagination
+            v-model:current-page="currentPage"
+            v-model:page-size="pageSize"
+            :page-sizes="[20, 50, 100]"
+            :total="totalCount"
+            layout="total, sizes, prev, pager, next"
+            @current-change="handlePageChange"
+            @size-change="handleSizeChange"
+          />
+        </template>
       </div>
     </div>
 
@@ -234,7 +338,8 @@
 import { ref, reactive, computed } from 'vue'
 import { 
   Search, Refresh, Download, Printer, Clock, 
-  MagicStick, Document, CaretRight 
+  MagicStick, Document, CaretRight,
+  TrendCharts, Location, DataAnalysis, Coin
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { searchRecords, text2sql, executeQuery } from '@/api/admin/query'
@@ -265,9 +370,25 @@ const checkpointNameMap = computed(() => {
 defineOptions({ name: 'EtcQuery' })
 
 const activeTab = ref('quick')
-const queryType = ref('traffic')
+const queryType = ref('stats')
 const queryLoading = ref(false)
 const text2sqlLoading = ref(false)
+
+// 统计查询相关状态
+const statsLoading = ref(false)
+const statsQueryTime = ref<number | null>(null)
+const statsData = ref<{
+  totalCount: number
+  checkpointCount: number
+  avgPerCheckpoint: number
+  dataSource: string
+  checkpointStats: Array<{
+    checkpointId: string
+    checkpointName: string
+    count: number
+    percentage: number
+  }>
+} | null>(null)
 
 // 筛选条件 - 默认时间范围为 HBase 历史数据所在时间（2023-12-01）
 const filters = reactive({
@@ -331,6 +452,10 @@ const hbaseLoading = ref(false)
 const hbaseData = ref<PassRecordItem[]>([])
 const hbaseNextRowKey = ref<string | undefined>(undefined)
 const hasMoreHbaseData = ref(true)
+// HBase 分页游标缓存：存储每页对应的 lastRowKey
+const hbasePageKeys = ref<Map<number, string | undefined>>(new Map())
+// 标记是否为筛选查询（HBase 筛选查询无法获取精确总数）
+const hbaseFilteredQuery = ref(false)
 
 // 加载更多 HBase 历史数据
 async function loadMoreHbaseData() {
@@ -381,20 +506,29 @@ async function loadMoreHbaseData() {
 
 // 快捷查询
 const handleQuickQuery = async () => {
+  // 统计查询单独处理
+  if (queryType.value === 'stats') {
+    await handleStatsQuery()
+    return
+  }
+  
   queryLoading.value = true
   const startTime = Date.now()
   
-  // 重置 HBase 数据
-  hbaseData.value = []
-  hbaseNextRowKey.value = undefined
-  hasMoreHbaseData.value = true
+  // 重置 HBase 分页状态（仅在首次查询时清空，翻页时保留）
+  if (currentPage.value === 1) {
+    hbaseData.value = []
+    hbaseNextRowKey.value = undefined
+    hasMoreHbaseData.value = true
+    hbasePageKeys.value.clear()  // 清空分页游标缓存
+  }
   
   try {
     if (queryType.value === 'clone') {
       // 套牌嫌疑查询 - 使用专门的套牌接口
       await handleCloneQuery(startTime)
     } else {
-      // 车流量统计 - 使用通行记录接口
+      // 车流量明细 - 使用通行记录接口
       await handleTrafficQuery(startTime)
     }
   } catch (e: any) {
@@ -403,6 +537,95 @@ const handleQuickQuery = async () => {
   } finally {
     queryLoading.value = false
   }
+}
+
+// 统计查询
+const handleStatsQuery = async () => {
+  statsLoading.value = true
+  statsData.value = null
+  const startTime = Date.now()
+  
+  try {
+    const queryStartDate = filters.dateRange?.[0] as Date
+    const queryEndDate = filters.dateRange?.[1] as Date
+    
+    if (!queryStartDate || !queryEndDate) {
+      ElMessage.warning('请选择查询时间范围')
+      return
+    }
+    
+    // 调用统计接口
+    const params: Record<string, string> = {
+      startDate: queryStartDate.toISOString().split('T')[0],
+      endDate: queryEndDate.toISOString().split('T')[0]
+    }
+    if (filters.checkpointId) {
+      params.checkpointId = filters.checkpointId
+    }
+    
+    console.log('🔍 统计查询参数:', params)
+    
+    const res = await fetch(`/api/stats/total?${new URLSearchParams(params)}`)
+    const data = await res.json()
+    
+    console.log('📊 统计查询响应:', data)
+    
+    if (data.code === 200 && data.data) {
+      const result = data.data
+      const totalCount = (result.hbaseCount || 0) + (result.mysqlCount || 0)
+      
+      // 处理收费站统计数据
+      const checkpointMap = result.checkpointCounts || {}
+      const checkpointStats = Object.entries(checkpointMap)
+        .map(([id, count]) => ({
+          checkpointId: id,
+          checkpointName: checkpointNameMap.value[id] || `卡口${id}`,
+          count: count as number,
+          percentage: totalCount > 0 ? ((count as number) / totalCount * 100) : 0
+        }))
+        .sort((a, b) => b.count - a.count)  // 按通行量降序排列
+      
+      statsData.value = {
+        totalCount,
+        checkpointCount: checkpointStats.length,
+        avgPerCheckpoint: checkpointStats.length > 0 
+          ? Math.round(totalCount / checkpointStats.length) 
+          : 0,
+        dataSource: result.source || (result.hbaseCount > 0 ? 'HBase' : 'MySQL'),
+        checkpointStats
+      }
+      
+      statsQueryTime.value = Date.now() - startTime
+      ElMessage.success(`统计完成，共 ${formatNumber(totalCount)} 条记录`)
+    } else {
+      ElMessage.error(data.msg || '统计查询失败')
+    }
+  } catch (e: any) {
+    console.error('统计查询失败:', e)
+    ElMessage.error(e.message || '统计查询失败')
+  } finally {
+    statsLoading.value = false
+  }
+}
+
+// 数字格式化
+const formatNumber = (num: number): string => {
+  return num.toLocaleString('zh-CN')
+}
+
+// 分页切换处理
+const handlePageChange = (page: number) => {
+  console.log('📄 切换到第', page, '页')
+  currentPage.value = page
+  handleQuickQuery()
+}
+
+// 每页条数切换处理
+const handleSizeChange = (size: number) => {
+  console.log('📄 每页显示', size, '条')
+  pageSize.value = size
+  currentPage.value = 1  // 重置到第一页
+  handleQuickQuery()
 }
 
 // 格式化本地时间为 ISO 格式（不含时区偏移，避免 UTC 转换问题）
@@ -414,32 +637,37 @@ const formatLocalDateTime = (date: Date): string => {
 // 车流量统计查询
 const handleTrafficQuery = async (startTime: number) => {
   // 判断查询时间范围，决定数据源
-  // 2024-01-01 之前的数据在 HBase，之后的在 MySQL
-  const cutoffDate = new Date('2024-01-01T00:00:00')
+  // MySQL 只存最近 7 天的热数据，7 天之前的数据在 HBase
+  const now = new Date()
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+  sevenDaysAgo.setHours(0, 0, 0, 0)  // 取整到当天零点
+  
   const queryStartDate = filters.dateRange?.[0] as Date
   const queryEndDate = filters.dateRange?.[1] as Date
   
-  const startsBeforeCutoff = queryStartDate && queryStartDate < cutoffDate
-  const endsAfterCutoff = queryEndDate && queryEndDate >= cutoffDate
+  const startsBeforeCutoff = queryStartDate && queryStartDate < sevenDaysAgo
+  const endsAfterCutoff = queryEndDate && queryEndDate >= sevenDaysAgo
+  
+  console.log(`📅 数据分界点: ${sevenDaysAgo.toISOString()} (7天前)`)
+  console.log(`📅 查询范围: ${queryStartDate?.toISOString()} ~ ${queryEndDate?.toISOString()}`)
   
   if (startsBeforeCutoff && endsAfterCutoff) {
     // 跨数据源查询 - 同时查 HBase 和 MySQL
     console.log('🔀 跨数据源查询 (HBase + MySQL)...')
-    await handleMixedQuery(startTime)
+    await handleMixedQuery(startTime, sevenDaysAgo)
   } else if (startsBeforeCutoff) {
-    // 历史数据查询 - 使用 HBase
+    // 历史数据查询 - 使用 HBase（查询时间全部在7天之前）
     console.log('📚 查询历史数据 (HBase)...')
     await handleHbaseQuery(startTime)
   } else {
-    // 热数据查询 - 使用 MySQL
+    // 热数据查询 - 使用 MySQL（查询时间全部在最近7天内）
     console.log('🔥 查询热数据 (MySQL)...')
     await handleMysqlQuery(startTime)
   }
 }
 
 // 混合查询（跨 HBase 和 MySQL）
-const handleMixedQuery = async (startTime: number) => {
-  const cutoffDate = new Date('2024-01-01T00:00:00')
+const handleMixedQuery = async (startTime: number, cutoffDate: Date) => {
   
   // 并行查询两个数据源
   const hbaseParams: Record<string, any> = {
@@ -480,7 +708,7 @@ const handleMixedQuery = async (startTime: number) => {
     console.log('📋 HBase 响应:', hbaseRes)
     console.log('📋 MySQL 响应:', mysqlRes)
     
-    setColumnsForQueryType('traffic')
+    setColumnsForQueryType('detail')
     
     // 合并结果
     const hbaseList = (hbaseRes.code === 200 && hbaseRes.data?.list || []).map((item: any) => ({
@@ -548,7 +776,7 @@ const handleMysqlQuery = async (startTime: number) => {
   console.log('📋 MySQL 查询响应:', res)
   
   if (res.code === 200 && res.data) {
-    setColumnsForQueryType('traffic')
+    setColumnsForQueryType('detail')
     // 将 checkpointId 映射为卡口名称
     queryResult.value = (res.data.list || []).map((item: any) => ({
       ...item,
@@ -567,10 +795,17 @@ const handleMysqlQuery = async (startTime: number) => {
 
 // HBase 历史数据查询
 const handleHbaseQuery = async (startTime: number) => {
+  // HBase 使用游标分页，获取当前页对应的 lastRowKey
+  const lastRowKey = currentPage.value > 1 ? hbasePageKeys.value.get(currentPage.value - 1) : undefined
+  
   const params: Record<string, any> = {
     source: 'hbase',
-    page: currentPage.value,
     size: pageSize.value
+  }
+  
+  // 如果有上一页的 lastRowKey，使用它来获取下一页
+  if (lastRowKey) {
+    params.lastRowKey = lastRowKey
   }
   
   if (filters.dateRange && filters.dateRange.length === 2) {
@@ -579,12 +814,12 @@ const handleHbaseQuery = async (startTime: number) => {
   }
   if (filters.checkpointId) params.checkpointId = filters.checkpointId
   
-  console.log('🔍 HBase 查询参数:', params)
+  console.log('🔍 HBase 查询参数:', params, '当前页:', currentPage.value)
   const res = await queryRecords(params)
   console.log('📋 HBase 查询响应:', res)
   
   if (res.code === 200 && res.data) {
-    setColumnsForQueryType('traffic')
+    setColumnsForQueryType('detail')
     // 转换 HBase 数据格式
     queryResult.value = (res.data.list || []).map((item: any) => ({
       id: item.rowKey || item.id,
@@ -597,17 +832,41 @@ const handleHbaseQuery = async (startTime: number) => {
       plateType: item.plateType || item.hpzl,
       district: item.district || item.xzqhmc
     }))
-    totalCount.value = res.data.totalCount || res.data.list?.length || 0
+    
+    // 判断是否有筛选条件
+    const hasFilters = res.data.hasFilters || false
+    // 判断统计缓存是否命中（后端会返回准确的总数）
+    const statsCached = res.data.statsCached || false
+    // 判断 totalCount 是否有效（大于 0 才算有效）
+    const hasValidTotal = res.data.totalCount != null && res.data.totalCount > 0
+    
+    // 只有当有准确总数时才显示完整分页，否则显示简单分页模式
+    if (hasValidTotal) {
+      hbaseFilteredQuery.value = false
+      totalCount.value = res.data.totalCount
+    } else {
+      // 没有准确总数，使用简单分页模式
+      hbaseFilteredQuery.value = true
+      totalCount.value = 0 // 不重要，会显示简单分页
+    }
     queryTime.value = Date.now() - startTime
     
-    // 更新 HBase 分页状态
+    // 更新 HBase 分页状态 - 缓存当前页的 nextRowKey 供下一页使用
     hbaseNextRowKey.value = res.data.nextRowKey
     hasMoreHbaseData.value = res.data.hasMoreHistory || false
     
-    console.log('✅ HBase 查询结果:', queryResult.value.length, '条, 总数:', totalCount.value)
+    // 缓存当前页的 nextRowKey（用于获取下一页）
+    if (res.data.nextRowKey) {
+      hbasePageKeys.value.set(currentPage.value, res.data.nextRowKey)
+    }
+    
+    console.log('✅ HBase 查询结果:', queryResult.value.length, '条, hasValidTotal:', hasValidTotal, '下一页Key:', res.data.nextRowKey)
     
     addToHistory('quick', getQueryDesc())
-    ElMessage.success(`查询完成，共 ${totalCount.value} 条记录 (历史数据)`)
+    const msg = hasValidTotal 
+      ? `查询完成，共 ${totalCount.value.toLocaleString()} 条记录` 
+      : `查询完成，已加载 ${queryResult.value.length} 条记录`
+    ElMessage.success(msg)
   } else {
     ElMessage.error(res.msg || '查询失败')
   }
@@ -670,7 +929,7 @@ const formatSuspectReason = (item: any): string => {
 // 根据查询类型设置表格列
 const setColumnsForQueryType = (type: string) => {
   switch (type) {
-    case 'traffic':
+    case 'detail':
       tableColumns.value = [
         { prop: 'plateNumber', label: '车牌号', width: 120 },
         { prop: 'checkpointName', label: '卡口名称', width: 180 },
@@ -939,6 +1198,93 @@ const printData = () => {
   }
 }
 
+// 统计结果
+.stats-result {
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+
+  .stats-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+
+    h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+      color: #1f2329;
+    }
+
+    .query-time {
+      font-size: 13px;
+      color: #8c8c8c;
+    }
+  }
+
+  .stats-overview {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+
+    .stats-card {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 20px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+
+      &.total {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      }
+
+      &.checkpoint {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      }
+
+      &.avg {
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+      }
+
+      &.source {
+        background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+      }
+
+      .stats-icon {
+        opacity: 0.85;
+      }
+
+      .stats-content {
+        .stats-value {
+          font-size: 28px;
+          font-weight: 700;
+          line-height: 1.2;
+        }
+
+        .stats-label {
+          font-size: 13px;
+          opacity: 0.9;
+          margin-top: 4px;
+        }
+      }
+    }
+  }
+
+  .checkpoint-stats {
+    h4 {
+      margin: 0 0 12px;
+      font-size: 14px;
+      font-weight: 500;
+      color: #1f2329;
+    }
+  }
+}
+
 // 查询结果
 .query-result {
   background: #fff;
@@ -981,6 +1327,19 @@ const printData = () => {
     justify-content: flex-end;
     padding: 16px;
     border-top: 1px solid #e5e6eb;
+
+    .simple-pagination {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+
+      .page-info {
+        color: #606266;
+        font-size: 14px;
+        min-width: 60px;
+        text-align: center;
+      }
+    }
   }
 }
 

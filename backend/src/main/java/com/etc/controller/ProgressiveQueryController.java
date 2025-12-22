@@ -3,6 +3,7 @@ package com.etc.controller;
 import com.etc.common.ApiResponse;
 import com.etc.entity.PassRecord;
 import com.etc.service.HBasePassRecordService;
+import com.etc.service.HBaseStatsService;
 import com.etc.service.QueryService;
 import com.etc.service.StatsReadService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -29,6 +31,7 @@ public class ProgressiveQueryController {
 
     private final QueryService queryService;
     private final HBasePassRecordService hbasePassRecordService;
+    private final HBaseStatsService hbaseStatsService;
     private final StatsReadService statsReadService;
 
     @GetMapping("/records")
@@ -48,11 +51,45 @@ public class ProgressiveQueryController {
         if ("hbase".equalsIgnoreCase(source)) {
             HBasePassRecordService.QueryResult r = hbasePassRecordService.query(
                     plateNumber, checkpointId, startTime, endTime, lastRowKey, size);
+            
+            // 判断是否有筛选条件
+            boolean hasFilters = (plateNumber != null && !plateNumber.isBlank()) 
+                    || (checkpointId != null && !checkpointId.isBlank());
+            
+            // 从 Redis 缓存获取统计数据
+            long totalCount = -1;
+            boolean statsCached = false;
+            
+            if (!hasFilters && startTime != null && endTime != null) {
+                // 无筛选条件，尝试从缓存获取精确计数
+                LocalDate startDate = startTime.toLocalDate();
+                LocalDate endDate = endTime.toLocalDate();
+                HBaseStatsService.StatsResult stats = hbaseStatsService.getFilteredStats(
+                        startDate, endDate, null, null);
+                totalCount = stats.count();
+                statsCached = stats.isCached();
+            } else if (hasFilters && startTime != null && endTime != null) {
+                // 有收费站筛选，尝试获取筛选后的统计
+                LocalDate startDate = startTime.toLocalDate();
+                LocalDate endDate = endTime.toLocalDate();
+                HBaseStatsService.StatsResult stats = hbaseStatsService.getFilteredStats(
+                        startDate, endDate, checkpointId, null);
+                totalCount = stats.count();
+                statsCached = stats.isCached();
+            }
+            
+            // 如果缓存未命中，使用组合总数
+            if (totalCount < 0 && !hasFilters) {
+                totalCount = statsReadService.getCombinedTotal();
+            }
+            
             Map<String, Object> data = new HashMap<>();
             data.put("source", "hbase");
             data.put("list", r.list());
             data.put("mysqlTotal", statsReadService.getMysql7dTotal());
-            data.put("totalCount", statsReadService.getCombinedTotal());
+            data.put("totalCount", totalCount);
+            data.put("hasFilters", hasFilters);
+            data.put("statsCached", statsCached);
             data.put("hasMoreHistory", r.hasMoreHistory());
             data.put("current", page);
             data.put("size", size);

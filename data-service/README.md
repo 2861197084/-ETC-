@@ -34,3 +34,4 @@ docker compose up -d data-service
 
 - CSV 编码：数据文件为 `UTF-8-SIG`（脚本已按此读取）。
 - 实时链路：若要看到 MySQL/HBase 的实时落库效果，需要 Kafka topic 已创建，并在 Flink 中提交 `MySqlStorageJob`、`HBaseStorageJob`。
+- 历史导入性能：可通过 `HBASE_IMPORT_BATCH_SIZE` 调整写入批大小（默认 `50000`，不稳定可降到 `20000`/`10000`）。

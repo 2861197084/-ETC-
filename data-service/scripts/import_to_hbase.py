@@ -303,7 +303,7 @@ def main():
     
     logger.info(f"找到 {len(csv_files)} 个 CSV 文件")
     
-    batch_size = int(os.getenv("HBASE_IMPORT_BATCH_SIZE", "5000"))
+    batch_size = int(os.getenv("HBASE_IMPORT_BATCH_SIZE", "50000"))
     logger.info(f"写入批大小: {batch_size} (可用环境变量 HBASE_IMPORT_BATCH_SIZE 调整)")
 
     total_inserted = 0
