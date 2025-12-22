@@ -280,7 +280,7 @@ import {
   MoreFilled, Loading
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { searchRecords, text2sql, executeQuery } from '@/api/admin/query'
+import { searchRecords, text2sql, executeQuery, executeQueryVanna } from '@/api/admin/query'
 import { queryRecords, type PassRecordItem } from '@/api/admin/progressive'
 import { getClonePlates } from '@/api/admin/realtime'
 import { checkpoints } from '@/config/checkpoints'
@@ -1145,14 +1145,40 @@ const handleText2Sql = async () => {
   }
   
   text2sqlLoading.value = true
+  const startTime = Date.now()
   
   try {
-    const res = await text2sql({ query: naturalLanguageQuery.value })
+    // 调用 Vanna 服务，同时生成 SQL 并执行
+    const res = await text2sql({ query: naturalLanguageQuery.value, execute: true })
     
     if (res.code === 200 && res.data) {
       generatedSql.value = res.data.sql || ''
       editMode.value = false
-      ElMessage.success('SQL 生成成功')
+      
+      // 如果有查询结果，直接展示
+      if (res.data.columns && res.data.result) {
+        tableColumns.value = res.data.columns.map((col: string) => ({
+          prop: col,
+          label: col,
+          width: 150
+        }))
+        // 转换数据格式 (数组 → 对象)
+        queryResult.value = res.data.result.map((row: any[]) => {
+          const obj: Record<string, unknown> = {}
+          res.data.columns!.forEach((col: string, i: number) => {
+            obj[col] = row[i]
+          })
+          return obj
+        })
+        totalCount.value = queryResult.value.length
+        queryTime.value = Date.now() - startTime
+        dataSource.value = 'mysql'
+        
+        addToHistory('sql', naturalLanguageQuery.value.substring(0, 30) + '...')
+        ElMessage.success(`查询完成，共 ${totalCount.value} 条记录`)
+      } else {
+        ElMessage.success('SQL 生成成功，点击"执行查询"查看结果')
+      }
     } else {
       ElMessage.error(res.msg || 'SQL 生成失败')
     }
@@ -1161,19 +1187,22 @@ const handleText2Sql = async () => {
     // 降级：使用本地模板
     const query = naturalLanguageQuery.value.toLowerCase()
     if (query.includes('车流量') || query.includes('流量')) {
-      generatedSql.value = `SELECT checkpoint_id, COUNT(*) as count FROM pass_record WHERE pass_time >= CURDATE() GROUP BY checkpoint_id ORDER BY count DESC`
+      generatedSql.value = `SELECT checkpoint_id, COUNT(*) as count FROM pass_record WHERE DATE(gcsj) = CURDATE() GROUP BY checkpoint_id ORDER BY count DESC`
     } else if (query.includes('超速')) {
-      generatedSql.value = `SELECT plate_number, speed, checkpoint_id, pass_time FROM pass_record WHERE speed > 120 ORDER BY speed DESC LIMIT 100`
+      generatedSql.value = `SELECT hp as plate_number, kkmc as checkpoint, gcsj as pass_time FROM pass_record WHERE clppxh LIKE '%跑车%' ORDER BY gcsj DESC LIMIT 100`
+    } else if (query.includes('套牌')) {
+      generatedSql.value = `SELECT * FROM clone_plate_detection WHERE status = 'pending' ORDER BY detection_time DESC LIMIT 50`
     } else {
-      generatedSql.value = `SELECT * FROM pass_record ORDER BY pass_time DESC LIMIT 100`
+      generatedSql.value = `SELECT hp, kkmc, gcsj, fxlx FROM pass_record ORDER BY gcsj DESC LIMIT 100`
     }
     editMode.value = false
+    ElMessage.warning('AI 服务暂不可用，已使用模板 SQL')
   } finally {
     text2sqlLoading.value = false
   }
 }
 
-// 执行 SQL
+// 执行 SQL (使用 Vanna 服务直接执行)
 const executeSql = async () => {
   if (!generatedSql.value.trim()) return
   
@@ -1181,7 +1210,7 @@ const executeSql = async () => {
   const startTime = Date.now()
   
   try {
-    const res = await executeQuery({ sql: generatedSql.value })
+    const res = await executeQueryVanna(generatedSql.value)
     
     if (res.code === 200 && res.data) {
       // 动态生成列

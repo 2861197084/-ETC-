@@ -83,3 +83,9 @@ __pycache__/
 .ruff_cache/
 .venv/
 venv/
+
+# Vanna
+vanna-service/chroma_data/
+vanna-service/.env
+*.pyc
+__pycache__/
