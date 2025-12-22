@@ -45,55 +45,6 @@
         <div class="map-container">
           <XuzhouTrafficMap ref="mapRef" />
         </div>
-
-        <!-- 底部指标栏 -->
-        <div class="metrics-bar">
-          <div class="metric-card">
-            <div class="metric-icon" style="background: linear-gradient(135deg, #667eea, #764ba2)">
-              <el-icon :size="20"><Van /></el-icon>
-            </div>
-            <div class="metric-info">
-              <span class="metric-value">{{ formatNumber(metrics.todayTotal) }}</span>
-              <span class="metric-label">今日总流量</span>
-            </div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-icon" style="background: linear-gradient(135deg, #f093fb, #f5576c)">
-              <el-icon :size="20"><Money /></el-icon>
-            </div>
-            <div class="metric-info">
-              <span class="metric-value">¥{{ formatNumber(metrics.todayRevenue) }}</span>
-              <span class="metric-label">今日总营收</span>
-            </div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-icon" style="background: linear-gradient(135deg, #4facfe, #00f2fe)">
-              <el-icon :size="20"><Odometer /></el-icon>
-            </div>
-            <div class="metric-info">
-              <span class="metric-value">{{ metrics.avgSpeed }} <small>km/h</small></span>
-              <span class="metric-label">平均车速</span>
-            </div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-icon" style="background: linear-gradient(135deg, #43e97b, #38f9d7)">
-              <el-icon :size="20"><Connection /></el-icon>
-            </div>
-            <div class="metric-info">
-              <span class="metric-value">{{ metrics.onlineStations }}/{{ metrics.totalStations }}</span>
-              <span class="metric-label">在线站点</span>
-            </div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-icon warning" style="background: linear-gradient(135deg, #fa709a, #fee140)">
-              <el-icon :size="20"><Warning /></el-icon>
-            </div>
-            <div class="metric-info">
-              <span class="metric-value alert">{{ metrics.alertCount }}</span>
-              <span class="metric-label">今日告警</span>
-            </div>
-          </div>
-        </div>
       </div>
 
       <!-- 右侧面板 -->
@@ -139,9 +90,9 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElNotification } from 'element-plus'
-import { Sunny, Van, Money, Odometer, Connection, Warning, Refresh } from '@element-plus/icons-vue'
+import { Sunny, Refresh } from '@element-plus/icons-vue'
 import { XuzhouTrafficMap, BloomStats, RegionRank, AlertTicker, ClonePlateAlert } from '@/components/business/etc'
-import { getDailyStats, getViolations, getClonePlates, getVehicleSourceStats, getRegionHeatStats, getFlowAlerts } from '@/api/admin/realtime'
+import { getViolations, getClonePlates, getVehicleSourceStats, getRegionHeatStats, getFlowAlerts } from '@/api/admin/realtime'
 import { getCheckpoints } from '@/api/admin/map'
 import { useSimulatedClock } from '@/hooks/core/useSimulatedClock'
 
@@ -167,38 +118,6 @@ const regionRankData = ref<{ region: string; count: number; trend: number }[]>([
 
 // 告警列表 - 支持压力告警类型
 const alertList = ref<{ id: string; type: 'overspeed' | 'duplicate' | 'dispatch' | 'illegal' | 'pressure'; message: string; plate: string; time: string; speed?: number }[]>([])
-
-// 底部指标数据
-const metrics = ref({
-  todayTotal: 0,
-  todayRevenue: 0,
-  avgSpeed: 0,
-  onlineStations: 0,
-  totalStations: 0,
-  alertCount: 0
-})
-
-// 加载统计数据
-const loadDailyStats = async () => {
-  try {
-    console.log('🔄 开始加载日统计数据...')
-    const res = await getDailyStats()
-    console.log('📊 日统计响应:', res)
-    if (res.code === 200 && res.data) {
-      const data = res.data as any
-      metrics.value = {
-        todayTotal: data.totalFlow || 0,
-        todayRevenue: data.totalRevenue || 0,
-        avgSpeed: data.avgSpeed || 85.6,
-        onlineStations: data.onlineCount || 0,
-        totalStations: data.checkpointCount || 0,
-        alertCount: data.alertCount || 0
-      }
-    }
-  } catch (e) {
-    console.error('加载日统计失败:', e)
-  }
-}
 
 // 当前区域热度时间范围
 const regionTimeRange = ref<'hour' | 'day'>('hour')
@@ -352,11 +271,6 @@ const checkFlowAlerts = async () => {
   */
 }
 
-// 格式化数字
-const formatNumber = (num: number) => {
-  return num.toLocaleString()
-}
-
 // 获取状态类型
 type TagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
 const getStatusType = (status: string): TagType => {
@@ -389,7 +303,6 @@ const isRefreshing = ref(false)
 // 加载所有数据
 const loadAllData = async () => {
   await Promise.all([
-    loadDailyStats(),
     loadRegionRank(),
     loadVehicleSource(),
     loadAlerts()
@@ -542,68 +455,6 @@ onUnmounted(() => {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
   border: 1px solid #e8e8e8;
   background: #fff;
-}
-
-// 底部指标栏
-.metrics-bar {
-  display: flex;
-  gap: 12px;
-  padding: 12px 16px;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  flex-shrink: 0;
-  overflow-x: auto;
-}
-
-.metric-card {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 12px;
-  border-right: 1px solid #f0f0f0;
-  white-space: nowrap;
-
-  &:last-child {
-    border-right: none;
-  }
-
-  .metric-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    flex-shrink: 0;
-  }
-
-  .metric-info {
-    display: flex;
-    flex-direction: column;
-
-    .metric-value {
-      font-size: 18px;
-      font-weight: 700;
-      color: #1f2329;
-
-      &.alert {
-        color: #ff4d4f;
-      }
-
-      small {
-        font-size: 11px;
-        font-weight: normal;
-        color: #8c8c8c;
-      }
-    }
-
-    .metric-label {
-      font-size: 11px;
-      color: #8c8c8c;
-    }
-  }
 }
 
 // 右侧面板
