@@ -13,10 +13,10 @@
 │  Spring Boot 3.x + REST API + Redis                             │
 ├─────────────────────────────────────────────────────────────────┤
 │                     处理层 (Processing)                          │
-│  Python 数据服务 (模拟) + Flink (套牌检测/存储)                    │
+│  Python 数据服务 (模拟) + Flink (套牌检测/存储)                   │
 ├─────────────────────────────────────────────────────────────────┤
 │                     存储层 (Storage)                             │
-│  MySQL + Redis + Kafka + HBase                            │
+│  MySQL + Redis + Kafka + HBase                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -70,9 +70,6 @@ docker compose run --rm data-service python -m scripts.realtime_generator
 docker compose up -d --build
 
 # 2) 在本机启动预测轮询（需要本机已安装 GPU 版 torch）
-# 任意平台通用：直接用你装了 torch 的 Python 来运行即可
-E:\anaconda3\envs\AI\python.exe scripts/run-forecast-local.py
-
 # 或者（macOS/Linux）
 python3 scripts/run-forecast-local.py
 ```
@@ -107,21 +104,6 @@ docker compose run --rm data-service python -m scripts.inject_clone_plate \
 - 后端接口：`GET http://localhost:8080/admin/realtime/clone-plates?plateNumber=TEST-CLONE-002`
 - 前端页面：`实时监控/套牌车检测` 或 `交互式查询/套牌嫌疑`
 
-## 时间模拟系统
-
-系统支持时间模拟，用于演示：
-- 模拟时间从 **2024-01-01 00:00** 开始
-- 每 **1 真实秒 = 5 模拟分钟**
-- 前端页面右上角显示当前模拟时间（替代真实时间显示）
-
-**API 接口：**
-```
-GET  /api/time        # 获取当前时间状态
-POST /api/time/start  # 启动模拟
-POST /api/time/pause  # 暂停模拟
-POST /api/time/reset  # 重置
-```
-
 ## 查询路由与统计
 
 - 热数据（近 7 天）：ShardingSphere Proxy（逻辑表 `pass_record` → `mysql0/mysql1` 的 `pass_record_0/1`）
@@ -134,7 +116,6 @@ POST /api/time/reset  # 重置
 系统集成了基于阿里云百炼（DashScope）的智能 Agent 助手，支持：
 
 - **语音交互**：文字 + 语音播报回复（CosyVoice TTS）
-- **虚拟数字人**：Live2D 交警形象（口型同步、待机动画）
 - **多工具调用**：自动调用后端 API 获取实时数据
 
 ### 支持的功能
@@ -147,27 +128,6 @@ POST /api/time/reset  # 重置
 | 套牌分析 | "查询套牌嫌疑"、"分析套牌记录 ID 为 5" |
 | 卡口信息 | "查询 CP001 卡口信息"、"铜山区有哪些卡口" |
 
-### 配置 API Key
-
-1. 在 [阿里云百炼](https://bailian.console.aliyun.com/) 获取 API Key
-2. 设置环境变量：
-   ```bash
-   # Windows
-   set DASHSCOPE_API_KEY=sk-xxxxx
-   
-   # Linux/macOS
-   export DASHSCOPE_API_KEY=sk-xxxxx
-   ```
-3. 或在 `docker-compose.yml` 中配置：
-   ```yaml
-   backend:
-     environment:
-       DASHSCOPE_API_KEY: "sk-xxxxx"
-   ```
-
-### Live2D 模型
-
-虚拟交警形象需要放置 Live2D 模型文件到 `frontend/public/live2d/police/` 目录，详见 [Live2D 资源说明](frontend/public/live2d/README.md)。
 
 ## 项目结构
 

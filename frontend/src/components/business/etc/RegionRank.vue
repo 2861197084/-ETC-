@@ -1,39 +1,52 @@
 <template>
-  <div class="region-rank">
+  <div class="region-rank glass-card">
     <div class="rank-header">
       <span class="rank-title">
-        <el-icon><TrendCharts /></el-icon>
+        <el-icon class="title-icon"><TrendCharts /></el-icon>
         区域热度排名
       </span>
-      <el-radio-group v-model="timeRange" size="small">
-        <el-radio-button value="hour">1小时</el-radio-button>
-        <el-radio-button value="day">今日</el-radio-button>
-      </el-radio-group>
+      <div class="time-tabs">
+        <span 
+          class="tab-item" 
+          :class="{ active: timeRange === 'hour' }"
+          @click="timeRange = 'hour'"
+        >1小时</span>
+        <span 
+          class="tab-item" 
+          :class="{ active: timeRange === 'day' }"
+          @click="timeRange = 'day'"
+        >今日</span>
+      </div>
     </div>
-    <div class="rank-list">
-      <div
-        v-for="(item, index) in rankData"
-        :key="item.region"
-        class="rank-item"
-        :class="{ 'top-three': index < 3 }"
-      >
-        <span class="rank-index" :class="`rank-${index + 1}`">
-          {{ index + 1 }}
-        </span>
-        <span class="rank-region">{{ item.region }}</span>
-        <div class="rank-bar-wrapper">
-          <div
-            class="rank-bar"
-            :style="{ width: `${(item.count / maxCount) * 100}%` }"
-            :class="getBarClass(index)"
-          ></div>
+    <div class="rank-list-container">
+      <div class="rank-list">
+        <div
+          v-for="(item, index) in rankData"
+          :key="item.region"
+          class="rank-item"
+        >
+          <div class="rank-info-row">
+            <span class="rank-index" :class="`rank-${index + 1}`">
+              {{ index + 1 }}
+            </span>
+            <span class="rank-region">{{ item.region }}</span>
+            <div class="rank-stats">
+              <span class="rank-count">{{ formatNumber(item.count) }}</span>
+              <span class="rank-trend" :class="item.trend > 0 ? 'up' : 'down'">
+                <el-icon v-if="item.trend > 0"><CaretTop /></el-icon>
+                <el-icon v-else><CaretBottom /></el-icon>
+                {{ Math.abs(item.trend) }}%
+              </span>
+            </div>
+          </div>
+          <div class="rank-bar-bg">
+            <div
+              class="rank-bar"
+              :style="{ width: `${(item.count / maxCount) * 100}%` }"
+              :class="getBarClass(index)"
+            ></div>
+          </div>
         </div>
-        <span class="rank-count">{{ formatNumber(item.count) }}</span>
-        <span class="rank-trend" :class="item.trend > 0 ? 'up' : 'down'">
-          <el-icon v-if="item.trend > 0"><CaretTop /></el-icon>
-          <el-icon v-else><CaretBottom /></el-icon>
-          {{ Math.abs(item.trend) }}%
-        </span>
       </div>
     </div>
   </div>
@@ -94,149 +107,178 @@ const formatNumber = (num: number) => {
 </script>
 
 <style lang="scss" scoped>
+.glass-card {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 16px;
+  box-shadow: 
+    0 4px 6px -1px rgba(0, 0, 0, 0.05),
+    0 2px 4px -1px rgba(0, 0, 0, 0.03),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
 .region-rank {
-  background: #fff;
-  border-radius: 8px;
+  padding: 20px;
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  border: 1px solid #e8e8e8;
 
   .rank-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 16px;
-    border-bottom: 1px solid #f0f0f0;
+    margin-bottom: 20px;
 
     .rank-title {
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #1f2329;
+      color: #0f172a;
       font-weight: 600;
-      font-size: 14px;
+      font-size: 16px;
+      letter-spacing: -0.01em;
+
+      .title-icon {
+        color: #3b82f6;
+      }
     }
 
-    :deep(.el-radio-group) {
-      .el-radio-button__inner {
-        background: #fff;
-        border-color: #d9d9d9;
-        color: #595959;
-      }
+    .time-tabs {
+      display: flex;
+      background: #f1f5f9;
+      padding: 2px;
+      border-radius: 8px;
+      
+      .tab-item {
+        padding: 4px 12px;
+        font-size: 12px;
+        color: #64748b;
+        cursor: pointer;
+        border-radius: 6px;
+        transition: all 0.2s;
 
-      .el-radio-button__original-radio:checked + .el-radio-button__inner {
-        background: #e6f7ff;
-        border-color: #1890ff;
-        color: #1890ff;
+        &.active {
+          background: #fff;
+          color: #0f172a;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+          font-weight: 500;
+        }
+
+        &:hover:not(.active) {
+          color: #475569;
+        }
       }
     }
   }
 
+  .rank-list-container {
+    flex: 1;
+    overflow-y: auto;
+    /* Hide scrollbar for clean look */
+    &::-webkit-scrollbar {
+      display: none;
+    }
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
   .rank-list {
-    padding: 8px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
   }
 
   .rank-item {
     display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 8px 16px;
-    transition: background 0.3s;
+    flex-direction: column;
+    gap: 8px;
 
-    &:hover {
-      background: #fafafa;
-    }
-
-    &.top-three {
-      .rank-region {
-        font-weight: 600;
-      }
-    }
-
-    .rank-index {
-      width: 24px;
-      height: 24px;
+    .rank-info-row {
       display: flex;
       align-items: center;
-      justify-content: center;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: 600;
-      background: #f5f5f5;
-      color: #8c8c8c;
+      justify-content: space-between;
 
-      &.rank-1 {
-        background: linear-gradient(135deg, #ffd700, #ffa500);
-        color: #000;
+      .rank-index {
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 700;
+        margin-right: 12px;
+        
+        &.rank-1 { color: #d97706; background: #fef3c7; }
+        &.rank-2 { color: #475569; background: #f1f5f9; }
+        &.rank-3 { color: #b45309; background: #ffedd5; }
+        // Default for others
+        color: #94a3b8;
+        background: transparent;
       }
 
-      &.rank-2 {
-        background: linear-gradient(135deg, #c0c0c0, #a0a0a0);
-        color: #000;
+      .rank-region {
+        flex: 1;
+        color: #334155;
+        font-size: 14px;
+        font-weight: 500;
       }
 
-      &.rank-3 {
-        background: linear-gradient(135deg, #cd7f32, #8b4513);
-        color: #fff;
+      .rank-stats {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+
+        .rank-count {
+          color: #0f172a;
+          font-weight: 600;
+          font-size: 14px;
+          font-feature-settings: "tnum";
+        }
+
+        .rank-trend {
+          display: flex;
+          align-items: center;
+          font-size: 12px;
+          font-weight: 500;
+          min-width: 45px;
+          justify-content: flex-end;
+
+          &.up { color: #ef4444; }
+          &.down { color: #22c55e; }
+        }
       }
     }
 
-    .rank-region {
-      min-width: 80px;
-      color: #1f2329;
-      font-size: 13px;
-    }
-
-    .rank-bar-wrapper {
-      flex: 1;
-      height: 8px;
-      background: #f0f0f0;
-      border-radius: 4px;
+    .rank-bar-bg {
+      height: 6px;
+      background: #f1f5f9;
+      border-radius: 3px;
       overflow: hidden;
+      width: 100%;
 
       .rank-bar {
         height: 100%;
-        border-radius: 4px;
-        transition: width 0.5s ease;
+        border-radius: 3px;
+        transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 
         &.bar-gold {
-          background: linear-gradient(90deg, #ffd700, #ffa500);
+          background: linear-gradient(90deg, #fbbf24, #d97706);
         }
 
         &.bar-silver {
-          background: linear-gradient(90deg, #c0c0c0, #a0a0a0);
+          background: linear-gradient(90deg, #94a3b8, #475569);
         }
 
         &.bar-bronze {
-          background: linear-gradient(90deg, #cd7f32, #8b4513);
+          background: linear-gradient(90deg, #fdba74, #ea580c);
         }
 
         &.bar-normal {
-          background: linear-gradient(90deg, #1890ff, #69c0ff);
+          background: linear-gradient(90deg, #38bdf8, #2563eb);
         }
-      }
-    }
-
-    .rank-count {
-      min-width: 50px;
-      text-align: right;
-      color: #1f2329;
-      font-size: 13px;
-      font-weight: 600;
-    }
-
-    .rank-trend {
-      display: flex;
-      align-items: center;
-      min-width: 50px;
-      font-size: 12px;
-
-      &.up {
-        color: #ff4d4f;
-      }
-
-      &.down {
-        color: #52c41a;
       }
     }
   }
