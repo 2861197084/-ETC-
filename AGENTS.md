@@ -6,6 +6,12 @@
 - `backend/`: Spring Boot REST API (source in `backend/src/main/java/com/etc/`, config in `backend/src/main/resources/application.yml`).
 - `data-service/`: Python scripts/utilities for CSV import and realtime simulation (`data-service/scripts/`).
 - `flink-jobs/`: Flink streaming jobs packaged as a shaded JAR (`flink-jobs/src/main/java/`).
+- `agent-service/`: Python 智能交警助手（DashScope + CosyVoice TTS）。
+- `vanna-service/`: Vanna Text2SQL 自然语言查询服务。
+- `Time-MoE/`: 时序预测模型微调代码（基于 Time-MoE 论文）。
+- `spark-jobs/`: Spark 预测作业脚本。
+- `scripts/`: 数据管道启停脚本（`start-data-pipeline.sh` / `stop-data-pipeline.sh`）。
+- `model/`: 模型权重目录（已加入 `.gitignore`，不提交到 Git）。
 - `infra/` + `docker-compose.yml`: local stack (MySQL/Redis/Kafka/Flink/etc.). Docs live in `doc/`.
 
 ## Build, Test, and Development Commands

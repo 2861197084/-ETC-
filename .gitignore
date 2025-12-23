@@ -89,3 +89,6 @@ vanna-service/chroma_data/
 vanna-service/.env
 *.pyc
 __pycache__/
+
+# Model weights (large files)
+model/

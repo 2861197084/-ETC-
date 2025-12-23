@@ -133,13 +133,19 @@ docker compose run --rm data-service python -m scripts.inject_clone_plate \
 
 ```
 /
+├── agent-service/     # Python 智能交警助手（DashScope + TTS）
 ├── backend/           # Java Spring Boot 后端
-├── frontend/          # Vue 3 前端
-├── data-service/      # Python 数据服务
-├── flink-jobs/        # Flink 流处理作业
-├── infra/             # Docker 基础设施配置
 ├── data/              # CSV 数据文件
+├── data-service/      # Python 数据服务（导入/模拟）
 ├── doc/               # 项目文档
+├── flink-jobs/        # Flink 流处理作业
+├── frontend/          # Vue 3 前端
+├── infra/             # Docker 基础设施配置
+├── model/             # 模型权重（.gitignore，不提交）
+├── scripts/           # 数据管道启停脚本
+├── spark-jobs/        # Spark 预测作业
+├── Time-MoE/          # 时序预测模型微调代码
+├── vanna-service/     # Vanna Text2SQL 服务
 └── docker-compose.yml
 ```
 
@@ -151,17 +157,18 @@ docker compose run --rm data-service python -m scripts.inject_clone_plate \
 | 后端 | Spring Boot 3.3.6, JDK 17, Spring AI Alibaba |
 | 数据服务 | Python 3.11（脚本：HBase 导入 / Kafka 实时模拟） |
 | 流处理 | Apache Flink 1.20 |
+| 批处理 | Apache Spark 3.5.4 |
 | 数据库 | MySQL 8, Redis 7 |
 | 消息队列 | Apache Kafka |
 | 大数据存储 | HBase |
 | AI 服务 | 阿里云百炼（通义千问 + CosyVoice TTS）|
+| 时序预测 | Time-MoE（Transformers + PyTorch）|
+| 自然语言查询 | Vanna Text2SQL |
 
 ## 文档
 
 - [API 接口文档](doc/API接口文档.md)
 - [数据库设计](doc/数据库设计总表.md)
-- [系统设计](doc/设计文档.md)
-- [需求文档](doc/需求文档.md)
 
 ## 默认账户
 
