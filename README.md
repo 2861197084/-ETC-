@@ -74,6 +74,14 @@ docker compose up -d --build
 python3 scripts/run-forecast-local.py
 ```
 
+## agent对话服务
+
+由于 Docker 内安装 PyTorch 依赖体积很大、构建耗时长，预测分析的推理进程建议在本机 GPU 环境运行，
+它会消费 `forecast_request` 并把结果写入 `checkpoint_flow_forecast_5m`，前端“预测分析页”会自动刷新展示。
+
+```powershell
+python3 agent-service/main.py
+```
 ### 3. 启动前端
 
 ```bash
@@ -141,7 +149,7 @@ docker compose run --rm data-service python -m scripts.inject_clone_plate \
 ├── flink-jobs/        # Flink 流处理作业
 ├── frontend/          # Vue 3 前端
 ├── infra/             # Docker 基础设施配置
-├── model/             # 模型权重（.gitignore，不提交）
+├── model/             # 模型权重
 ├── scripts/           # 数据管道启停脚本
 ├── spark-jobs/        # Spark 预测作业
 ├── Time-MoE/          # 时序预测模型微调代码
