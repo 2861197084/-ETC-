@@ -96,8 +96,13 @@ pnpm dev
 |------|------|
 | 前端 | http://localhost:5173 |
 | 后端 API | http://localhost:8080 |
-| API 文档 | http://localhost:8080/docs |
 | Flink UI | http://localhost:8081 |
+| Spark UI | http://localhost:18080 |
+| Trino UI | http://localhost:8090 |
+| HBase UI | http://localhost:16010 |
+| Agent 服务 | http://localhost:8090 |
+| Vanna 服务 | http://localhost:8100 |
+
 
 ## 套牌检测测试（推荐）
 
