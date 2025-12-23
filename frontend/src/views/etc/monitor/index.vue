@@ -230,12 +230,17 @@ const loadAlerts = async () => {
   }
 }
 
-// 车流量高峰检测 - 超过阈值时弹窗提示
-// TODO: 暂时禁用，避免历史数据导致持续弹窗
+// 车流量高峰检测 - 超过阈值时弹窗提示（最少间隔50秒）
+let lastAlertTime = 0
+const ALERT_COOLDOWN = 30000 // 30秒冷却时间
+
 const checkFlowAlerts = async () => {
-  // 暂时禁用
-  return
-  /*
+  const now = Date.now()
+  if (now - lastAlertTime < ALERT_COOLDOWN) {
+    // 冷却中，跳过弹窗
+    return
+  }
+  
   try {
     const res = await getFlowAlerts(0.7) // 阈值70%触发弹窗
     if (res.code === 200 && res.data?.hasAlerts && res.data.alerts.length > 0) {
@@ -252,6 +257,7 @@ const checkFlowAlerts = async () => {
           duration: 8000,
           position: 'top-right'
         })
+        lastAlertTime = now // 更新最后弹窗时间
       } else if (warningAlerts.length > 0) {
         // 警告级别 - 使用较轻的提示
         ElNotification({
@@ -261,6 +267,7 @@ const checkFlowAlerts = async () => {
           duration: 5000,
           position: 'top-right'
         })
+        lastAlertTime = now // 更新最后弹窗时间
       }
       
       console.log('🚨 车流量高峰检测:', res.data.alertCount, '个卡口超过阈值')
@@ -268,7 +275,6 @@ const checkFlowAlerts = async () => {
   } catch (e) {
     console.error('车流量检测失败:', e)
   }
-  */
 }
 
 // 获取状态类型

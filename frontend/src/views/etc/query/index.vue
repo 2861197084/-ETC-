@@ -1540,15 +1540,18 @@ const printData = () => {
     }
 
     .sql-code {
-      background: #1f2329;
-      color: #52c41a;
-      padding: 16px;
-      border-radius: 6px;
+      background: #f5f7fa;
+      color: #1a73e8;
+      padding: 20px 24px;
+      border-radius: 8px;
+      border: 1px solid #e4e7ed;
       font-family: 'Fira Code', 'Consolas', monospace;
-      font-size: 13px;
-      line-height: 1.6;
+      font-size: 14px;
+      line-height: 1.8;
       overflow-x: auto;
       margin-bottom: 16px;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
 
     .sql-editor {
@@ -1556,6 +1559,10 @@ const printData = () => {
       
       :deep(.el-textarea__inner) {
         font-family: 'Fira Code', 'Consolas', monospace;
+        font-size: 14px;
+        line-height: 1.8;
+        padding: 16px;
+        min-height: 120px;
       }
     }
   }

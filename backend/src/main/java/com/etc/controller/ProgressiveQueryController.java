@@ -50,16 +50,25 @@ public class ProgressiveQueryController {
         long t0 = System.nanoTime();
 
         if ("hbase".equalsIgnoreCase(source)) {
-            HBasePassRecordService.QueryResult r = hbasePassRecordService.query(
-                    plateNumber, checkpointId, direction, startTime, endTime, lastRowKey, page, size);
+            // 判断是否为"情况1：纯时间范围查询"（无车牌/卡口/方向筛选）
+            boolean isTimeOnlyQuery = (plateNumber == null || plateNumber.isBlank())
+                    && (checkpointId == null || checkpointId.isBlank())
+                    && (direction == null || direction.isBlank())
+                    && startTime != null && endTime != null;
             
-            // 使用 HBase 扫描返回的精确总数
-            long totalCount = r.total();
+            HBasePassRecordService.QueryResult r;
+            if (isTimeOnlyQuery) {
+                // 情况1：使用并行扫描 + K路归并
+                r = hbasePassRecordService.queryParallel(startTime, endTime, lastRowKey, size);
+            } else {
+                // 其他情况：使用原有顺序扫描
+                r = hbasePassRecordService.query(plateNumber, checkpointId, direction, startTime, endTime, lastRowKey, page, size);
+            }
             
             Map<String, Object> data = new HashMap<>();
             data.put("source", "hbase");
             data.put("list", r.list());
-            data.put("total", totalCount);
+            data.put("total", r.total());
             data.put("page", page);
             data.put("size", size);
             data.put("hasMoreHistory", r.hasMoreHistory());

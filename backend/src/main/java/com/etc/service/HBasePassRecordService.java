@@ -2,7 +2,10 @@ package com.etc.service;
 
 import com.etc.common.CheckpointCatalog;
 import com.etc.common.HBaseTimeUtils;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Connection;
 import org.apache.hadoop.hbase.client.Result;
@@ -14,28 +17,47 @@ import org.apache.hadoop.hbase.filter.FilterList;
 import org.apache.hadoop.hbase.filter.SingleColumnValueFilter;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.concurrent.*;
 
 import static org.apache.hadoop.hbase.CompareOperator.*;
 
+/**
+ * HBase 通行记录查询服务
+ */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class HBasePassRecordService {
 
     private static final byte[] CF = Bytes.toBytes("d");
+    private static final int SALT_COUNT = 10;
+    private static final String REDIS_DAILY_PREFIX = "etc:hbase:daily:";
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd");
 
     private final Connection connection;
+    private final StringRedisTemplate redisTemplate;
+    
+    // 并行扫描线程池
+    private final ExecutorService scanExecutor = Executors.newFixedThreadPool(SALT_COUNT);
 
     @Value("${HBASE_TABLE:etc:pass_record}")
     private String tableName;
 
+    // ==================== 原有查询方法（完全保持不变） ====================
+
+    /**
+     * 原有查询方法 - 带筛选条件时使用
+     * 支持：车牌、卡口、方向、时间范围筛选
+     */
     public QueryResult query(
             String plateNumber,
             String checkpointId,
@@ -48,7 +70,6 @@ public class HBasePassRecordService {
         long t0 = System.nanoTime();
 
         int limit = Math.max(1, size);
-        // Fetch one extra row to detect "has more" without scanning the whole table.
         int fetch = limit + 1;
 
         List<Map<String, Object>> list = new ArrayList<>();
@@ -66,26 +87,20 @@ public class HBasePassRecordService {
         if (checkpointIdFilter != null && !checkpointIdFilter.isBlank()) {
             filters.addFilter(eqFilter("checkpoint_id", checkpointIdFilter));
         }
-        // 方向筛选 - 兼容 "1"/"2" 和 "进城"/"出城"
         if (direction != null && !direction.isBlank()) {
             String d = direction.trim();
             if ("1".equals(d)) {
-                // 进城：匹配 "1" 或 "进城"
                 filters.addFilter(directionFilter("1", "进城"));
             } else if ("2".equals(d)) {
-                // 出城：匹配 "2" 或 "出城"
                 filters.addFilter(directionFilter("2", "出城"));
             } else {
                 filters.addFilter(eqFilter("fxlx", d));
             }
         }
-        // 时间范围过滤 - 使用字典序兼容多种格式
         if (startTime != null) {
-            // 使用最小的格式确保不漏数据
             filters.addFilter(geFilter("gcsj", HBaseTimeUtils.getMinTimeString(startTime)));
         }
         if (endTime != null) {
-            // 使用最大的格式确保不漏数据
             filters.addFilter(leFilter("gcsj", HBaseTimeUtils.getMaxTimeString(endTime)));
         }
 
@@ -94,21 +109,18 @@ public class HBasePassRecordService {
         scan.setFilter(filters);
         scan.addFamily(CF);
         
-        // 游标分页模式：如果提供了 lastRowKey，从该位置开始扫描
-        // page=1 时从头开始并计算 total；page>1 时使用 lastRowKey 跳过
         boolean needCountTotal = (page == 1 && (lastRowKey == null || lastRowKey.isBlank()));
         
         if (lastRowKey != null && !lastRowKey.isBlank()) {
-            scan.withStartRow(Bytes.toBytes(lastRowKey), false); // false = 不包含起始行
+            scan.withStartRow(Bytes.toBytes(lastRowKey), false);
         }
         
-        long totalCount = -1; // -1 表示不计算总数（使用缓存的值）
+        long totalCount = -1;
 
         try (Table table = connection.getTable(TableName.valueOf(tableName));
              ResultScanner scanner = table.getScanner(scan)) {
             
             if (needCountTotal) {
-                // 首次查询：遍历全部计算 total
                 for (Result r : scanner) {
                     if (r == null || r.isEmpty()) continue;
 
@@ -120,7 +132,6 @@ public class HBasePassRecordService {
                     if (totalCount < 0) totalCount = 0;
                     totalCount++;
                     
-                    // 只收集当前页数据
                     if (list.size() < limit) {
                         String rowKey = Bytes.toString(r.getRow());
                         list.add(buildRecordMap(r, rowKey, checkpointId, gcsj));
@@ -128,7 +139,6 @@ public class HBasePassRecordService {
                     }
                 }
             } else {
-                // 后续翻页：只获取当前页数据，不计算 total
                 int count = 0;
                 for (Result r : scanner) {
                     if (r == null || r.isEmpty()) continue;
@@ -145,7 +155,6 @@ public class HBasePassRecordService {
                         nextRowKey = rowKey;
                     }
                     
-                    // 获取到 fetch 条就停止
                     if (count >= fetch) {
                         break;
                     }
@@ -156,15 +165,267 @@ public class HBasePassRecordService {
         }
 
         long ms = (System.nanoTime() - t0) / 1_000_000;
-        // 游标模式：有更多数据 = 获取到的数据超过 limit
         boolean hasMoreHistory = (list.size() > limit) || (nextRowKey != null && list.size() == limit);
 
         return new QueryResult(list, nextRowKey, hasMoreHistory, ms, totalCount);
     }
 
+    // ==================== 新增：并行扫描查询（仅用于纯时间范围查询） ====================
+
     /**
-     * 构建记录 Map
+     * 并行扫描 + K路归并（仅用于"情况1：纯时间范围查询"）
+     * 
+     * 特点：
+     * - 10 个 salt 分区并行扫描
+     * - K 路归并按时间降序排序
+     * - 分布式游标分页
+     * - 从 Redis 获取总数（需提前运行 count_daily_to_redis.py）
+     * 
+     * @param startTime 开始时间
+     * @param endTime 结束时间
+     * @param cursorJson 游标 JSON（格式：{"0":"rowkey0", "5":"rowkey5", ...}）
+     * @param size 每页大小
+     * @return 查询结果
      */
+    public QueryResult queryParallel(
+            LocalDateTime startTime,
+            LocalDateTime endTime,
+            String cursorJson,
+            int size) {
+        
+        long t0 = System.nanoTime();
+        int limit = Math.max(1, size);
+        int fetchPerPartition = limit * 2;
+        
+        Map<Integer, String> cursor = parseCursor(cursorJson);
+        boolean isFirstPage = cursor.isEmpty();
+        
+        log.info("🚀 HBase 并行扫描: 10 分区, 时间 {} ~ {}, 首页={}", 
+                startTime.format(DATE_FORMAT), endTime.format(DATE_FORMAT), isFirstPage);
+        
+        // 并行扫描 10 个分区
+        List<CompletableFuture<SaltScanResult>> futures = new ArrayList<>();
+        for (int salt = 0; salt < SALT_COUNT; salt++) {
+            final int s = salt;
+            String startRowKey = cursor.get(s);
+            
+            CompletableFuture<SaltScanResult> future = CompletableFuture.supplyAsync(
+                    () -> scanSaltPartition(s, startTime, endTime, startRowKey, fetchPerPartition),
+                    scanExecutor
+            );
+            futures.add(future);
+        }
+        
+        List<SaltScanResult> partitionResults = futures.stream()
+                .map(CompletableFuture::join)
+                .toList();
+        
+        // K 路归并
+        MergeResult mergeResult = kWayMerge(partitionResults, limit);
+        
+        String nextCursor = mergeResult.hasMore ? serializeCursor(mergeResult.cursor) : null;
+        
+        // 从 Redis 获取总数（仅首页）
+        long totalCount = isFirstPage ? getTotalFromRedis(startTime, endTime) : -1;
+        
+        long ms = (System.nanoTime() - t0) / 1_000_000;
+        log.info("✅ 并行扫描完成: {} 条, hasMore={}, 总数={}, 耗时 {} ms", 
+                mergeResult.data.size(), mergeResult.hasMore, totalCount, ms);
+        
+        return new QueryResult(mergeResult.data, nextCursor, mergeResult.hasMore, ms, totalCount);
+    }
+
+    /**
+     * 扫描单个 salt 分区（反向扫描，最新时间优先）
+     * 
+     * RowKey 设计: {salt(1)}{yyyyMMdd(8)}{checkpoint_hash(8)}{reverse_ts(13)}{plate_hash(4)}
+     * 其中 reverse_ts = Long.MAX_VALUE - timestamp，时间越新 reverse_ts 越小
+     * 
+     * 使用 Reversed Scan：
+     * - startRow 设为 endDate + "~"（大端，扫描起点）
+     * - stopRow 设为 startDate（小端，扫描终点）
+     * - 这样从大到小扫描，先获取 endDate 的数据
+     */
+    private SaltScanResult scanSaltPartition(
+            int salt,
+            LocalDateTime startTime,
+            LocalDateTime endTime,
+            String startRowKey,
+            int fetchLimit) {
+        
+        List<Map<String, Object>> data = new ArrayList<>();
+        String lastRowKey = null;
+        
+        try (Table table = connection.getTable(TableName.valueOf(tableName))) {
+            Scan scan = new Scan();
+            scan.setCaching(500);
+            scan.addFamily(CF);
+            scan.setReversed(true);  // ⭐ 关键：启用反向扫描
+            
+            String startDate = startTime.format(DATE_FORMAT);
+            String endDate = endTime.format(DATE_FORMAT);
+            
+            // 反向扫描：startRow > stopRow
+            // startRow: 从 endDate 最后一条开始（包含）
+            // stopRow: 到 startDate 第一条结束（不包含）
+            if (startRowKey != null && !startRowKey.isBlank()) {
+                // 翻页时，从游标位置继续（不包含游标本身）
+                scan.withStartRow(Bytes.toBytes(startRowKey), false);
+            } else {
+                // 首页：从 endDate 末尾开始
+                scan.withStartRow(Bytes.toBytes(salt + endDate + "~"));
+            }
+            // 反向扫描的 stopRow 需要小于 startDate
+            scan.withStopRow(Bytes.toBytes(String.valueOf(salt) + startDate));
+            
+            FilterList filters = new FilterList(FilterList.Operator.MUST_PASS_ALL);
+            filters.addFilter(geFilter("gcsj", HBaseTimeUtils.getMinTimeString(startTime)));
+            filters.addFilter(leFilter("gcsj", HBaseTimeUtils.getMaxTimeString(endTime)));
+            scan.setFilter(filters);
+            
+            try (ResultScanner scanner = table.getScanner(scan)) {
+                for (Result r : scanner) {
+                    if (r == null || r.isEmpty()) continue;
+                    
+                    String gcsj = getString(r, "gcsj");
+                    if (!HBaseTimeUtils.isInRange(gcsj, startTime, endTime)) {
+                        continue;
+                    }
+                    
+                    String rowKey = Bytes.toString(r.getRow());
+                    data.add(buildRecordMap(r, rowKey, null, gcsj));
+                    lastRowKey = rowKey;
+                    
+                    if (data.size() >= fetchLimit) {
+                        break;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("扫描分区 {} 失败: {}", salt, e.getMessage());
+        }
+        
+        return new SaltScanResult(salt, data, lastRowKey);
+    }
+
+    /**
+     * K 路归并（按 gcsj 时间降序）
+     */
+    private MergeResult kWayMerge(List<SaltScanResult> partitions, int limit) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        Map<Integer, String> newCursor = new HashMap<>();
+        
+        List<List<Map<String, Object>>> lists = new ArrayList<>();
+        for (int i = 0; i < SALT_COUNT; i++) {
+            lists.add(new ArrayList<>());
+        }
+        for (SaltScanResult r : partitions) {
+            lists.set(r.salt, r.data);
+            if (r.lastRowKey != null) {
+                newCursor.put(r.salt, r.lastRowKey);
+            }
+        }
+        
+        // 优先队列：按 gcsj 降序（时间最新的优先）
+        PriorityQueue<SaltEntry> pq = new PriorityQueue<>((a, b) -> b.gcsj.compareTo(a.gcsj));
+        
+        // 初始化：每个分区放入第一条
+        for (int salt = 0; salt < SALT_COUNT; salt++) {
+            if (!lists.get(salt).isEmpty()) {
+                Map<String, Object> record = lists.get(salt).get(0);
+                String gcsj = (String) record.get("passTime");
+                pq.offer(new SaltEntry(salt, 0, gcsj, record));
+            }
+        }
+        
+        // 归并
+        while (!pq.isEmpty() && result.size() < limit) {
+            SaltEntry entry = pq.poll();
+            result.add(entry.record);
+            
+            String rowKey = (String) entry.record.get("rowKey");
+            newCursor.put(entry.salt, rowKey);
+            
+            int nextIdx = entry.index + 1;
+            if (nextIdx < lists.get(entry.salt).size()) {
+                Map<String, Object> nextRecord = lists.get(entry.salt).get(nextIdx);
+                String nextGcsj = (String) nextRecord.get("passTime");
+                pq.offer(new SaltEntry(entry.salt, nextIdx, nextGcsj, nextRecord));
+            }
+        }
+        
+        boolean hasMore = !pq.isEmpty();
+        if (!hasMore) {
+            for (SaltScanResult r : partitions) {
+                if (r.data.size() >= limit * 2) {
+                    hasMore = true;
+                    break;
+                }
+            }
+        }
+        
+        return new MergeResult(result, newCursor, hasMore);
+    }
+
+    /**
+     * 从 Redis 获取时间范围内的总量
+     */
+    private long getTotalFromRedis(LocalDateTime startTime, LocalDateTime endTime) {
+        long total = 0;
+        LocalDate current = startTime.toLocalDate();
+        LocalDate end = endTime.toLocalDate();
+        
+        List<String> keys = new ArrayList<>();
+        while (!current.isAfter(end)) {
+            keys.add(REDIS_DAILY_PREFIX + current.format(DATE_FORMAT));
+            current = current.plusDays(1);
+        }
+        
+        try {
+            List<String> values = redisTemplate.opsForValue().multiGet(keys);
+            if (values != null) {
+                for (String v : values) {
+                    if (v != null) {
+                        total += Long.parseLong(v);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("从 Redis 获取总数失败: {}", e.getMessage());
+            return -1;
+        }
+        
+        return total;
+    }
+
+    private Map<Integer, String> parseCursor(String cursorJson) {
+        if (cursorJson == null || cursorJson.isBlank()) {
+            return new HashMap<>();
+        }
+        try {
+            return MAPPER.readValue(cursorJson, new TypeReference<Map<Integer, String>>() {});
+        } catch (Exception e) {
+            log.warn("游标解析失败: {}", cursorJson);
+            return new HashMap<>();
+        }
+    }
+
+    private String serializeCursor(Map<Integer, String> cursor) {
+        try {
+            return MAPPER.writeValueAsString(cursor);
+        } catch (Exception e) {
+            return "{}";
+        }
+    }
+
+    // ==================== 内部记录类 ====================
+    
+    private record SaltScanResult(int salt, List<Map<String, Object>> data, String lastRowKey) {}
+    private record MergeResult(List<Map<String, Object>> data, Map<Integer, String> cursor, boolean hasMore) {}
+    private record SaltEntry(int salt, int index, String gcsj, Map<String, Object> record) {}
+
+    // ==================== 工具方法 ====================
+
     private Map<String, Object> buildRecordMap(Result r, String rowKey, String checkpointId, String gcsj) {
         Map<String, Object> item = new HashMap<>();
         item.put("rowKey", rowKey);
@@ -196,9 +457,7 @@ public class HBasePassRecordService {
 
     private static SingleColumnValueFilter eqFilter(String qualifier, String value) {
         SingleColumnValueFilter f = new SingleColumnValueFilter(
-                CF,
-                Bytes.toBytes(qualifier),
-                EQUAL,
+                CF, Bytes.toBytes(qualifier), EQUAL,
                 new BinaryComparator(value.getBytes(StandardCharsets.UTF_8)));
         f.setFilterIfMissing(true);
         return f;
@@ -206,9 +465,7 @@ public class HBasePassRecordService {
 
     private static SingleColumnValueFilter geFilter(String qualifier, String value) {
         SingleColumnValueFilter f = new SingleColumnValueFilter(
-                CF,
-                Bytes.toBytes(qualifier),
-                GREATER_OR_EQUAL,
+                CF, Bytes.toBytes(qualifier), GREATER_OR_EQUAL,
                 new BinaryComparator(value.getBytes(StandardCharsets.UTF_8)));
         f.setFilterIfMissing(true);
         return f;
@@ -216,18 +473,12 @@ public class HBasePassRecordService {
 
     private static SingleColumnValueFilter leFilter(String qualifier, String value) {
         SingleColumnValueFilter f = new SingleColumnValueFilter(
-                CF,
-                Bytes.toBytes(qualifier),
-                LESS_OR_EQUAL,
+                CF, Bytes.toBytes(qualifier), LESS_OR_EQUAL,
                 new BinaryComparator(value.getBytes(StandardCharsets.UTF_8)));
         f.setFilterIfMissing(true);
         return f;
     }
 
-    /**
-     * 方向筛选过滤器 - 匹配数字或中文
-     * 使用 OR 逻辑：fxlx = value1 OR fxlx = value2
-     */
     private static FilterList directionFilter(String numValue, String cnValue) {
         FilterList orFilter = new FilterList(FilterList.Operator.MUST_PASS_ONE);
         orFilter.addFilter(eqFilter("fxlx", numValue));

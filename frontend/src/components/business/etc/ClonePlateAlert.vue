@@ -44,7 +44,7 @@
             </el-descriptions-item>
             <el-descriptions-item label="推算时速">
               <span class="speed-warning">{{ currentAlert.calculatedSpeed?.toFixed(0) }} km/h</span>
-              <span class="speed-note">（物理上不可能）</span>
+              <span class="speed-note"></span>
             </el-descriptions-item>
           </el-descriptions>
         </div>
